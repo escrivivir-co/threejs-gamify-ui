@@ -3140,6 +3140,9 @@
         particleCount: 0
       };
       
+      // Initialize particle system
+      window.particleSystem = window.particleSystem || [];
+      
       function updatePerformanceStats() {
         window.performanceStats.frameCount++;
         
@@ -3152,7 +3155,7 @@
           window.performanceStats.startTime = currentTime;
           
           // Update particle count
-          window.performanceStats.particleCount = window.particleSystem.length;
+          window.performanceStats.particleCount = window.particleSystem ? window.particleSystem.length : 0;
           
           // Memory usage (if available)
           if (performance.memory) {
@@ -3234,7 +3237,7 @@
         }
         
         // Clean up old particles
-        if (window.particleSystem.length > 100) {
+        if (window.particleSystem && window.particleSystem.length > 100) {
           const particlesToRemove = window.particleSystem.splice(0, window.particleSystem.length - 100);
           particlesToRemove.forEach(particle => {
             if (particle.parent) particle.parent.remove(particle);
