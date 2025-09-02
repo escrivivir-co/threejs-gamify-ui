@@ -176,6 +176,109 @@
       .demo-button:hover {
         background: #5b5ff0;
       }
+
+      .bot-info-panel {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.95);
+        border: 2px solid #4CAF50;
+        border-radius: 12px;
+        padding: 20px;
+        min-width: 300px;
+        z-index: 200;
+        display: none;
+        color: white;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+      }
+
+      .bot-info-panel h3 {
+        margin: 0 0 16px 0;
+        color: #4CAF50;
+        font-size: 20px;
+        text-align: center;
+      }
+
+      .bot-detail {
+        margin: 8px 0;
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .bot-detail-label {
+        font-weight: bold;
+        color: #ccc;
+      }
+
+      .close-btn {
+        position: absolute;
+        top: 8px;
+        right: 12px;
+        background: none;
+        border: none;
+        color: #ff4444;
+        font-size: 20px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+
+      .immersive-controls {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 10px;
+        z-index: 100;
+      }
+
+      .control-icon {
+        background: rgba(0, 0, 0, 0.8);
+        border: 1px solid #333;
+        color: white;
+        width: 50px;
+        height: 50px;
+        border-radius: 25px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        transition: all 0.3s;
+      }
+
+      .control-icon:hover {
+        background: rgba(76, 175, 80, 0.8);
+        transform: scale(1.1);
+      }
+
+      .interaction-hint {
+        position: absolute;
+        top: 50px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 14px;
+        opacity: 0.8;
+        z-index: 100;
+      }
+
+      .bot-hover-effect {
+        position: absolute;
+        pointer-events: none;
+        background: rgba(76, 175, 80, 0.2);
+        border: 2px solid #4CAF50;
+        border-radius: 50%;
+        width: 100px;
+        height: 100px;
+        transform: translate(-50%, -50%);
+        display: none;
+        z-index: 150;
+      }
     </style>
   </head>
   <body>
@@ -194,6 +297,19 @@
           <button class="demo-button" onclick="toggleAllBots()">Toggle All Bots</button>
           <button class="demo-button" onclick="resetScene()">Reset Scene</button>
         </div>
+
+        <div class="interaction-hint">
+          🖱️ Click and drag to orbit • Click bots for details • Scroll to zoom
+        </div>
+
+        <div class="immersive-controls">
+          <button class="control-icon" onclick="resetCamera()" title="Reset Camera">🎯</button>
+          <button class="control-icon" onclick="toggleAutoRotate()" title="Auto Rotate">🔄</button>
+          <button class="control-icon" onclick="focusHub()" title="Focus Hub">🏠</button>
+          <button class="control-icon" onclick="toggleFullscreen()" title="Fullscreen">⛶</button>
+        </div>
+
+        <div class="bot-hover-effect" id="bot-hover-effect"></div>
       </div>
       
       <div class="ui-panels">
@@ -215,8 +331,34 @@
       </div>
     </div>
 
+    <!-- Bot Info Panel -->
+    <div class="bot-info-panel" id="bot-info-panel">
+      <button class="close-btn" onclick="closeBotInfo()">×</button>
+      <h3 id="bot-info-title">Bot Details</h3>
+      <div class="bot-detail">
+        <span class="bot-detail-label">Status:</span>
+        <span id="bot-info-status">-</span>
+      </div>
+      <div class="bot-detail">
+        <span class="bot-detail-label">Position:</span>
+        <span id="bot-info-position">-</span>
+      </div>
+      <div class="bot-detail">
+        <span class="bot-detail-label">Cardinal:</span>
+        <span id="bot-info-cardinal">-</span>
+      </div>
+      <div class="bot-detail">
+        <span class="bot-detail-label">Messages Sent:</span>
+        <span id="bot-info-messages">0</span>
+      </div>
+      <div style="margin-top: 16px; text-align: center;">
+        <button class="control-button start-btn" onclick="directBotControl()" id="bot-info-control">Interact</button>
+      </div>
+    </div>
+
     <!-- Three.js and Socket.io from CDN for reliable loading -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r158/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r158/controls/OrbitControls.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.js"></script>
     
     <script>
@@ -290,6 +432,29 @@
         window.renderer.shadowMap.enabled = true;
         window.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
+        // Orbit Controls for immersive navigation
+        window.controls = new THREE.OrbitControls(window.camera, window.renderer.domElement);
+        window.controls.enableDamping = true;
+        window.controls.dampingFactor = 0.05;
+        window.controls.enableZoom = true;
+        window.controls.enableRotate = true;
+        window.controls.enablePan = true;
+        window.controls.minDistance = 5;
+        window.controls.maxDistance = 50;
+        window.controls.autoRotate = false;
+        window.controls.autoRotateSpeed = 1.0;
+
+        // Raycaster for mouse interactions
+        window.raycaster = new THREE.Raycaster();
+        window.mouse = new THREE.Vector2();
+        window.selectedBot = null;
+        window.hoveredBot = null;
+
+        // Add mouse event listeners
+        canvas.addEventListener('mousemove', onMouseMove);
+        canvas.addEventListener('click', onMouseClick);
+        canvas.addEventListener('mouseout', onMouseOut);
+
         // Lighting
         const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
         window.scene.add(ambientLight);
@@ -310,6 +475,12 @@
           window.camera.aspect = container.clientWidth / container.clientHeight;
           window.camera.updateProjectionMatrix();
           window.renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+
+        // Initialize message counters
+        window.messageCounters = new Map();
+        window.bots.forEach((bot, botId) => {
+          window.messageCounters.set(botId, 0);
         });
 
         // Start animation loop
@@ -379,6 +550,11 @@
         
         requestAnimationFrame(animate);
 
+        // Update orbit controls
+        if (window.controls) {
+          window.controls.update();
+        }
+
         // Hub pulsing animation
         if (window.hub) {
           const time = Date.now() * 0.002;
@@ -386,17 +562,138 @@
           window.hub.scale.setScalar(scale);
         }
 
-        // Bot bobbing animation
+        // Bot bobbing animation with enhanced effects
         const time = Date.now() * 0.001;
         window.botMeshes.forEach((botMesh, botId) => {
           if (botMesh.userData.originalPosition) {
+            const bot = window.bots.get(botId);
             const bobOffset = Math.sin(time + Math.random()) * 0.2;
             botMesh.position.y = botMesh.userData.originalPosition.y + bobOffset;
+            
+            // Enhanced glow for active bots
+            if (bot && bot.status === 'active') {
+              const glowIntensity = Math.sin(time * 3) * 0.3 + 0.7;
+              botMesh.material.emissive.setScalar(glowIntensity * 0.1);
+            } else {
+              botMesh.material.emissive.setScalar(0);
+            }
+            
+            // Hover effect
+            if (window.hoveredBot === botId) {
+              const hoverScale = 1 + Math.sin(time * 5) * 0.1;
+              botMesh.scale.setScalar(hoverScale);
+            } else {
+              botMesh.scale.setScalar(1);
+            }
           }
         });
 
         // Render
         window.renderer.render(window.scene, window.camera);
+      }
+
+      // Mouse interaction functions
+      function onMouseMove(event) {
+        const rect = event.target.getBoundingClientRect();
+        window.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        window.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        // Update raycaster
+        window.raycaster.setFromCamera(window.mouse, window.camera);
+        const intersects = window.raycaster.intersectObjects([...window.botMeshes.values()]);
+
+        const hoverEffect = document.getElementById('bot-hover-effect');
+
+        if (intersects.length > 0) {
+          const intersectedBot = intersects[0].object;
+          const botId = intersectedBot.userData.botId;
+          
+          if (window.hoveredBot !== botId) {
+            window.hoveredBot = botId;
+            
+            // Show hover effect
+            const screenPos = intersects[0].point.clone();
+            screenPos.project(window.camera);
+            
+            const x = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
+            const y = (screenPos.y * -0.5 + 0.5) * window.innerHeight;
+            
+            hoverEffect.style.left = x + 'px';
+            hoverEffect.style.top = y + 'px';
+            hoverEffect.style.display = 'block';
+            
+            // Change cursor
+            event.target.style.cursor = 'pointer';
+          }
+        } else {
+          if (window.hoveredBot) {
+            window.hoveredBot = null;
+            hoverEffect.style.display = 'none';
+            event.target.style.cursor = 'grab';
+          }
+        }
+      }
+
+      function onMouseClick(event) {
+        const rect = event.target.getBoundingClientRect();
+        window.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        window.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        // Update raycaster
+        window.raycaster.setFromCamera(window.mouse, window.camera);
+        const intersects = window.raycaster.intersectObjects([...window.botMeshes.values()]);
+
+        if (intersects.length > 0) {
+          const intersectedBot = intersects[0].object;
+          const botId = intersectedBot.userData.botId;
+          showBotInfo(botId);
+          
+          // Add click effect
+          createClickEffect(intersects[0].point);
+          
+          // Increment message counter for interaction
+          const currentCount = window.messageCounters.get(botId) || 0;
+          window.messageCounters.set(botId, currentCount + 1);
+          
+          addMessage(`Bot ${botId} clicked - showing details`, 'ui');
+        }
+      }
+
+      function onMouseOut(event) {
+        window.hoveredBot = null;
+        const hoverEffect = document.getElementById('bot-hover-effect');
+        hoverEffect.style.display = 'none';
+        event.target.style.cursor = 'default';
+      }
+
+      function createClickEffect(position) {
+        const geometry = new THREE.RingGeometry(0.5, 1, 8);
+        const material = new THREE.MeshBasicMaterial({ 
+          color: 0x4CAF50, 
+          transparent: true, 
+          opacity: 0.8 
+        });
+        const ring = new THREE.Mesh(geometry, material);
+        ring.position.copy(position);
+        ring.lookAt(window.camera.position);
+        window.scene.add(ring);
+
+        // Animate ring expansion and fade
+        let scale = 1;
+        const animate = () => {
+          scale += 0.1;
+          ring.scale.setScalar(scale);
+          material.opacity -= 0.05;
+          
+          if (material.opacity <= 0) {
+            window.scene.remove(ring);
+            return;
+          }
+          
+          requestAnimationFrame(animate);
+        };
+        
+        animate();
       }
 
       function createSimpleScene() {
@@ -482,6 +779,11 @@
 
         window.socket.on('message', (data) => {
           addMessage(`${data.botId}: ${data.message}`, data.channel || 'app');
+          
+          // Increment message counter
+          const currentCount = window.messageCounters.get(data.botId) || 0;
+          window.messageCounters.set(data.botId, currentCount + 1);
+          
           if (typeof THREE !== 'undefined') {
             animateMessageParticle(data.botId);
           }
@@ -580,6 +882,86 @@
         }
       }
 
+      // Immersive control functions
+      function showBotInfo(botId) {
+        const bot = window.bots.get(botId);
+        if (!bot) return;
+
+        window.selectedBot = botId;
+        
+        document.getElementById('bot-info-title').textContent = `${bot.name} Details`;
+        document.getElementById('bot-info-status').textContent = bot.status.toUpperCase();
+        document.getElementById('bot-info-position').textContent = `(${bot.position.x}, ${bot.position.y}, ${bot.position.z})`;
+        document.getElementById('bot-info-cardinal').textContent = bot.cardinal;
+        document.getElementById('bot-info-messages').textContent = window.messageCounters.get(botId) || 0;
+        
+        const controlBtn = document.getElementById('bot-info-control');
+        controlBtn.textContent = bot.status === 'active' ? 'Stop Bot' : 'Start Bot';
+        controlBtn.className = `control-button ${bot.status === 'active' ? 'stop-btn' : 'start-btn'}`;
+        
+        document.getElementById('bot-info-panel').style.display = 'block';
+      }
+
+      function closeBotInfo() {
+        document.getElementById('bot-info-panel').style.display = 'none';
+        window.selectedBot = null;
+      }
+
+      function directBotControl() {
+        if (!window.selectedBot) return;
+        
+        const bot = window.bots.get(window.selectedBot);
+        const newStatus = bot.status === 'active' ? 'inactive' : 'active';
+        const action = bot.status === 'active' ? 'stop' : 'start';
+        
+        // Emit to server if connected
+        if (window.socket && window.socket.connected) {
+          window.socket.emit('bot:control', { botId: window.selectedBot, action, status: newStatus });
+        }
+        
+        // Update local state
+        updateBotStatus(window.selectedBot, newStatus);
+        addMessage(`Bot ${window.selectedBot} ${action} via direct interaction`, 'ui');
+        
+        // Update the info panel
+        showBotInfo(window.selectedBot);
+      }
+
+      function resetCamera() {
+        if (window.controls) {
+          window.camera.position.set(15, 15, 15);
+          window.camera.lookAt(0, 0, 0);
+          window.controls.reset();
+          addMessage('Camera position reset', 'ui');
+        }
+      }
+
+      function toggleAutoRotate() {
+        if (window.controls) {
+          window.controls.autoRotate = !window.controls.autoRotate;
+          addMessage(`Auto-rotate ${window.controls.autoRotate ? 'enabled' : 'disabled'}`, 'ui');
+        }
+      }
+
+      function focusHub() {
+        if (window.controls && window.hub) {
+          window.controls.target.copy(window.hub.position);
+          window.camera.position.set(5, 8, 5);
+          window.camera.lookAt(window.hub.position);
+          addMessage('Focused on central hub', 'ui');
+        }
+      }
+
+      function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen();
+          addMessage('Entered fullscreen mode', 'ui');
+        } else {
+          document.exitFullscreen();
+          addMessage('Exited fullscreen mode', 'ui');
+        }
+      }
+
       function addMessage(message, channel = 'app') {
         const messageLog = document.getElementById('message-log');
         const messageItem = document.createElement('div');
@@ -598,33 +980,76 @@
       }
 
       function sendTestMessage() {
+        const botIds = Array.from(window.bots.keys());
+        const randomBotId = botIds[Math.floor(Math.random() * botIds.length)];
+        
         const messages = [
           'System health check complete',
-          'Processing bot communication',
-          'Real-time data streaming active',
-          'Cardinal spiral positions optimized',
-          'Message particle animation ready'
+          'Processing real-time data',
+          'Bot network synchronization active',
+          'Cardinal spiral optimization running',
+          'Message particle system operational',
+          'Interactive mode fully engaged'
         ];
-        const channels = ['sys', 'app', 'ui'];
         
+        const channels = ['sys', 'app', 'ui'];
         const message = messages[Math.floor(Math.random() * messages.length)];
         const channel = channels[Math.floor(Math.random() * channels.length)];
         
-        addMessage(message, channel);
+        // Simulate message from random bot
+        if (window.socket && window.socket.connected) {
+          window.socket.emit('message', { botId: randomBotId, message, channel });
+        } else {
+          addMessage(`${randomBotId}: ${message}`, channel);
+          if (typeof THREE !== 'undefined') {
+            animateMessageParticle(randomBotId);
+          }
+        }
       }
 
       function toggleAllBots() {
-        const buttons = document.querySelectorAll('.control-button');
-        buttons.forEach((button, i) => {
-          setTimeout(() => toggleBot(`bot-${['n1','n2','s1','s2','e1','e2','w1','w2'][i]}`, button), i * 200);
+        let delay = 0;
+        window.bots.forEach((bot, botId) => {
+          setTimeout(() => {
+            const newStatus = bot.status === 'active' ? 'inactive' : 'active';
+            const action = bot.status === 'active' ? 'stop' : 'start';
+            
+            if (window.socket && window.socket.connected) {
+              window.socket.emit('bot:control', { botId, action, status: newStatus });
+            } else {
+              updateBotStatus(botId, newStatus);
+            }
+            
+            addMessage(`Bot ${botId} ${action} in sequence`, 'ui');
+          }, delay);
+          delay += 200;
         });
       }
 
       function resetScene() {
+        // Reset all bots to inactive
+        window.bots.forEach((bot, botId) => {
+          updateBotStatus(botId, 'inactive');
+        });
+        
+        // Reset message counters
+        window.messageCounters.clear();
+        window.bots.forEach((bot, botId) => {
+          window.messageCounters.set(botId, 0);
+        });
+        
+        // Clear message log
         const messageLog = document.getElementById('message-log');
         messageLog.innerHTML = '<div class="message-item message-sys">[System] Scene reset complete</div>';
-        addMessage('All bot connections reset', 'sys');
-        addMessage('3D scene reinitialized', 'ui');
+        
+        // Reset camera
+        resetCamera();
+        
+        // Close any open panels
+        closeBotInfo();
+        
+        addMessage('Complete system reset - all bots inactive', 'sys');
+        addMessage('3D scene and interactions reinitialized', 'ui');
       }
     </script>
   </body>
