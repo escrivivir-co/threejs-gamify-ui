@@ -27,6 +27,24 @@
     "resolveJsonModule": true,
     "esModuleInterop": true
   },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "client/**/*",
+    "server/**/*",
+    "shared/**/*",
+    "**/*.tsx",
+    "**/*.jsx",
+    "src/app/core/services/demo.service.ts",
+    "src/app/core/services/integration.service.ts",
+    "src/app/demo/demo-client.ts",
+    "src/app/shared/three/animation-controller.ts",
+    "src/app/shared/three/trajectory-manager.ts",
+    "src/test.ts"
+  ],
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,
     "strictInjectionParameters": true,

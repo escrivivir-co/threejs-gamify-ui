@@ -1,4 +1,5 @@
 // Core interfaces for the RxJS-Socket.io bridge
+import { Observable } from 'rxjs';
 
 export enum ChannelType {
   SYS = 'sys',
@@ -114,5 +115,5 @@ export interface ReconnectionHandler {
   start(): void;
   stop(): void;
   getAttempts(): number;
-  isReconnecting(): boolean;
+  isReconnecting: Observable<boolean>;
 }

@@ -7,7 +7,7 @@ import { BotListComponent } from './features/bot-management/bot-list.component';
 import { MessagePanelComponent } from './features/message-panel/message-panel.component';
 import { ThreeSceneService } from './shared/three/three-scene.service';
 import { RxjsSocketBridge } from './core/bridge/rxjs-socket-bridge';
-import { AlephScriptService } from './core/services/alephscript.service';
+import { SocketService } from './core/services/socket.service';
 
 @Component({
   selector: 'app-root',
@@ -35,7 +35,7 @@ import { AlephScriptService } from './core/services/alephscript.service';
           <h1>ThreeGamificationUI</h1>
           <div class="connection-status">
             <span class="status-indicator" [class]="connectionStatus"></span>
-            AlephScript: {{ connectionStatus.toUpperCase() }}
+            Socket.io: {{ connectionStatus.toUpperCase() }}
           </div>
         </div>
         
@@ -75,23 +75,23 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
   constructor(
     private threeSceneService: ThreeSceneService,
-    private alephScriptService: AlephScriptService,
+    private socketService: SocketService,
     private rxjsSocketBridge: RxjsSocketBridge
   ) {}
 
   ngOnInit() {
-    console.log('%c��� ThreeGamificationUI - AlephScript Integration v1.0 initializing...', 'color: #ff0099; font-weight: bold; font-size: 14px');
+    console.log('ThreeGamificationUI initializing...');
     
     // Subscribe to connection status
-    this.alephScriptService.connectionStatus
+    this.socketService.connectionStatus$
       .pipe(takeUntil(this.destroy$))
       .subscribe(status => {
         this.connectionStatus = status;
         console.log('Connection status:', status);
       });
 
-    // Initialize AlephScript connection
-    this.alephScriptService.connect();
+    // Initialize Socket.io connection
+    this.socketService.connect();
   }
 
   ngAfterViewInit() {
@@ -112,7 +112,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       this.threeSceneService.startRenderLoop();
       
       // Subscribe to FPS updates
-      this.threeSceneService.fps
+      this.threeSceneService.fps$
         .pipe(takeUntil(this.destroy$))
         .subscribe(fps => {
           this.currentFPS = Math.round(fps);
@@ -161,6 +161,6 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     
     // Clean up services
     this.threeSceneService.dispose();
-    this.alephScriptService.disconnect();
+    this.socketService.disconnect();
   }
 }

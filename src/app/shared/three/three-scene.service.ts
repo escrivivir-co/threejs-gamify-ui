@@ -222,22 +222,25 @@ export class ThreeSceneService {
         };
         
         this.botPositions.push(botMesh);
-        this.scene.add(botMesh);
+        if (this.scene) {
+          this.scene.add(botMesh);
+        }
         
         // Add position marker (ring around bot)
         const ringGeometry = new THREE.RingGeometry(0.8, 1.2, 16);
         const ringMaterial = new THREE.MeshBasicMaterial({
           color: 0x34495e,
           transparent: true,
-          opacity: 0.3,
-          side: THREE.DoubleSide
+          opacity: 0.3
         });
         const ring = new THREE.Mesh(ringGeometry, ringMaterial);
         ring.rotation.x = -Math.PI / 2;
         ring.position.copy(position);
         ring.position.y = 0.1;
         
-        this.scene.add(ring);
+        if (this.scene) {
+          this.scene.add(ring);
+        }
       }
     });
     
@@ -337,7 +340,7 @@ export class ThreeSceneService {
       if (bot) {
         // Gentle bobbing motion
         const bobOffset = Math.sin(this.clock.elapsedTime * 1.5 + index * 0.3) * 0.1;
-        bot.position.y = bot.userData.position.y + bobOffset;
+        bot.position.y = bot.userData['position'].y + bobOffset;
         
         // Subtle rotation
         bot.rotation.y = this.clock.elapsedTime * 0.2 + index * 0.5;
@@ -354,7 +357,7 @@ export class ThreeSceneService {
    * Update bot status visualization
    */
   updateBotStatus(botId: string, status: 'online' | 'offline' | 'processing'): void {
-    const botMesh = this.botPositions.find(bot => bot.userData.botId === botId);
+    const botMesh = this.botPositions.find(bot => bot.userData['botId'] === botId);
     
     if (!botMesh) {
       console.warn('Bot not found:', botId);

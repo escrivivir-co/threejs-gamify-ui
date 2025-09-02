@@ -110,7 +110,7 @@ export class MessagePanelComponent implements OnInit, OnDestroy, AfterViewInit {
         return `${systemEvent.severity.toUpperCase()}: ${systemEvent.event}`;
         
       default:
-        return `${socketMessage.type} message`;
+        return `Unknown message type`;
     }
   }
 

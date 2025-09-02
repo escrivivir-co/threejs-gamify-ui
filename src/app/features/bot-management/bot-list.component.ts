@@ -167,6 +167,10 @@ export class BotListComponent implements OnInit, OnDestroy {
     return this.selectedBotIds.size;
   }
 
+  trackBot(index: number, bot: Bot): string {
+    return bot.id;
+  }
+
   ngOnDestroy() {
     console.log('BotListComponent destroying...');
     this.destroy$.next();

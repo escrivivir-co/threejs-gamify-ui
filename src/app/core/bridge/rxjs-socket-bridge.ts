@@ -1,12 +1,12 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Subject, Observable, timer, NEVER } from 'rxjs';
-import { 
-  filter, 
-  map, 
-  takeUntil, 
-  retry, 
-  retryWhen, 
-  delay, 
+import {
+  filter,
+  map,
+  takeUntil,
+  retry,
+  retryWhen,
+  delay,
   mergeMap,
   scan,
   throttleTime,
@@ -14,7 +14,6 @@ import {
   share,
   shareReplay
 } from 'rxjs/operators';
-import { io, Socket } from 'socket.io-client';
 
 import {
   ChannelType,
@@ -29,24 +28,31 @@ import {
   Room
 } from './interfaces';
 
+// Declare global AlephScript client
+declare global {
+  interface Window {
+    createAlephScriptClient: any;
+  }
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class RxjsSocketBridge implements ChannelManager, RoomManager, ReconnectionHandler {
-  private socket: Socket | null = null;
+  private alephClient: any = null;
   private destroy$ = new Subject<void>();
-  
+
   // Core subjects for reactive streams
   private connectionStatus$ = new BehaviorSubject<string>('disconnected');
   private messageStream$ = new Subject<SocketMessage>();
   private errorStream$ = new Subject<Error>();
   private bridgeEvents$ = new Subject<BridgeEvent>();
-  
+
   // Channel-specific streams
   private sysChannel$ = new Subject<SocketMessage>();
   private appChannel$ = new Subject<SocketMessage>();
   private uiChannel$ = new Subject<SocketMessage>();
-  
+
   // State management
   private activeRooms = new Set<string>();
   private reconnectionAttempts = 0;
@@ -67,21 +73,53 @@ export class RxjsSocketBridge implements ChannelManager, RoomManager, Reconnecti
   public readonly uiMessages = this.uiChannel$.asObservable().pipe(shareReplay(1));
 
   constructor() {
-    console.log('RxjsSocketBridge initialized');
-    
+    console.log('🔗 RxjsSocketBridge initialized with AlephScript');
+
     // Set up message distribution pipeline
     this.setupMessagePipeline();
-    
+
     // Set up reconnection handling
     this.setupReconnectionHandler();
+
+    // Load AlephScript client
+    this.loadAlephScriptClient();
   }
 
   /**
-   * Initialize connection to Socket.io server
+   * Load AlephScript client library
+   */
+  private async loadAlephScriptClient(): Promise<void> {
+    try {
+      // Check if already loaded
+      if (window.createAlephScriptClient) {
+        console.log('✅ AlephScript client already available');
+        return;
+      }
+
+      // Dynamically load the script
+      const script = document.createElement('script');
+      script.src = '/assets/alephscript-client.js';
+      script.async = true;
+      
+      await new Promise((resolve, reject) => {
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+
+      console.log('✅ AlephScript client loaded successfully');
+    } catch (error) {
+      console.error('❌ Failed to load AlephScript client:', error);
+      this.errorStream$.next(error as Error);
+    }
+  }
+
+  /**
+   * Initialize connection to AlephScript server
    */
   connect(config?: ConnectionConfig): void {
     const defaultConfig: ConnectionConfig = {
-      url: `http://localhost:8000`,
+      url: `ws://localhost:9090`,  // ✅ Puerto correcto para AlephScript
       options: {
         autoConnect: true,
         timeout: 20000,
@@ -95,103 +133,158 @@ export class RxjsSocketBridge implements ChannelManager, RoomManager, Reconnecti
     };
 
     const finalConfig = config || defaultConfig;
-    
-    console.log('Connecting to Socket.io server:', finalConfig.url);
-    
+
+    console.log('🚀 Connecting to AlephScript server:', finalConfig.url);
+
     try {
-      // Create socket connection
-      this.socket = io(finalConfig.url, finalConfig.options);
-      
-      // Set up event handlers
-      this.setupSocketEventHandlers();
-      
-      // Emit bridge event
-      this.bridgeEvents$.next({
-        type: 'connection',
-        data: { config: finalConfig },
-        timestamp: Date.now()
+      // Wait for AlephScript client to be available
+      this.waitForAlephScript().then(() => {
+        // Create AlephScript client
+        this.alephClient = window.createAlephScriptClient(
+          'threejs',           // uiType
+          'threejs-visual',    // clientId
+          finalConfig.url      // serverUrl
+        );
+
+        // Set up event handlers
+        this.setupAlephScriptEventHandlers();
+
+        // Connect
+        this.alephClient.connect();
+
+        // Emit bridge event
+        this.bridgeEvents$.next({
+          type: 'connection',
+          data: { config: finalConfig },
+          timestamp: Date.now()
+        });
+
+      }).catch(error => {
+        console.error('❌ Failed to initialize AlephScript client:', error);
+        this.errorStream$.next(error);
       });
-      
+
     } catch (error) {
-      console.error('Failed to create socket connection:', error);
+      console.error('❌ Failed to create AlephScript connection:', error);
       this.errorStream$.next(error as Error);
     }
   }
 
   /**
-   * Disconnect from Socket.io server
+   * Wait for AlephScript client to be available
    */
-  disconnect(): void {
-    console.log('Disconnecting from Socket.io server');
-    
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
+  private async waitForAlephScript(): Promise<void> {
+    let attempts = 0;
+    const maxAttempts = 50;
+
+    while (!window.createAlephScriptClient && attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      attempts++;
     }
-    
-    this.connectionStatus$.next('disconnected');
-    this.activeRooms.clear();
-    this.stopReconnection();
-    
-    this.bridgeEvents$.next({
-      type: 'disconnection',
-      timestamp: Date.now()
-    });
+
+    if (!window.createAlephScriptClient) {
+      throw new Error('AlephScript client not available after waiting');
+    }
   }
 
   /**
-   * Set up Socket.io event handlers
+   * Set up AlephScript event handlers
    */
-  private setupSocketEventHandlers(): void {
-    if (!this.socket) return;
+  private setupAlephScriptEventHandlers(): void {
+    if (!this.alephClient) return;
 
     // Connection events
-    this.socket.on('connect', () => {
-      console.log('Socket.io connected');
+    this.alephClient.on('connected', () => {
+      console.log('✅ AlephScript connected');
       this.connectionStatus$.next('connected');
       this.reconnectionAttempts = 0;
       this.isReconnecting$.next(false);
       this.stopReconnection();
     });
 
-    this.socket.on('disconnect', (reason) => {
-      console.log('Socket.io disconnected:', reason);
+    this.alephClient.on('disconnected', () => {
+      console.log('❌ AlephScript disconnected');
       this.connectionStatus$.next('disconnected');
-      
-      if (reason !== 'io client disconnect') {
-        this.startReconnection();
-      }
+      this.startReconnection();
     });
 
-    this.socket.on('connect_error', (error) => {
-      console.error('Socket.io connection error:', error);
+    this.alephClient.on('error', (error: any) => {
+      console.error('❌ AlephScript error:', error);
       this.connectionStatus$.next('error');
       this.errorStream$.next(error);
       this.startReconnection();
     });
 
-    // Message events
-    this.socket.on('message', (data: SocketMessage) => {
-      this.handleIncomingMessage(data);
+    // Game state events
+    this.alephClient.on('gameStateUpdate', (data: any) => {
+      const message: SocketMessage = this.convertToSocketMessage(data, ChannelType.APP, MessageType.SYSTEM_EVENT);
+      this.handleIncomingMessage(message);
     });
 
-    // Channel-specific events
-    Object.values(ChannelType).forEach(channel => {
-      this.socket!.on(`${channel}_message`, (data: SocketMessage) => {
-        data.channel = channel as ChannelType;
-        this.handleIncomingMessage(data);
-      });
+    // Agent events
+    this.alephClient.on('agentSelected', (data: any) => {
+      const message: SocketMessage = this.convertToSocketMessage(data, ChannelType.APP, MessageType.BOT_COMMAND);
+      this.handleIncomingMessage(message);
     });
 
-    // Room events
-    this.socket.on('room_joined', (roomId: string) => {
-      console.log('Joined room:', roomId);
-      this.activeRooms.add(roomId);
+    // Postulation events
+    this.alephClient.on('postulationsUpdate', (data: any) => {
+      const message: SocketMessage = this.convertToSocketMessage(data, ChannelType.UI, MessageType.SYSTEM_EVENT);
+      this.handleIncomingMessage(message);
     });
 
-    this.socket.on('room_left', (roomId: string) => {
-      console.log('Left room:', roomId);
-      this.activeRooms.delete(roomId);
+    // X value events
+    this.alephClient.on('xValueUpdate', (data: any) => {
+      const message: SocketMessage = this.convertToSocketMessage(data, ChannelType.SYS, MessageType.SYSTEM_EVENT);
+      this.handleIncomingMessage(message);
+    });
+
+    // Console output events
+    this.alephClient.on('consoleOutput', (data: any) => {
+      const message: SocketMessage = this.convertToSocketMessage(data, ChannelType.SYS, MessageType.SYSTEM_EVENT);
+      this.handleIncomingMessage(message);
+    });
+
+    // Heartbeat events
+    this.alephClient.on('heartbeat', (data: any) => {
+      const message: SocketMessage = this.convertToSocketMessage(data, ChannelType.SYS, MessageType.HEALTH_CHECK);
+      this.handleIncomingMessage(message);
+    });
+  }
+
+  /**
+   * Convert AlephScript data to SocketMessage format
+   */
+  private convertToSocketMessage(data: any, channel: ChannelType, type: MessageType): SocketMessage {
+    return {
+      id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: Date.now(),
+      channel,
+      type,
+      action: data.action || 'update',
+      data: data,
+      source: 'alephscript'
+    } as SocketMessage;
+  }
+
+  /**
+   * Disconnect from AlephScript server
+   */
+  disconnect(): void {
+    console.log('🔌 Disconnecting from AlephScript server');
+
+    if (this.alephClient) {
+      this.alephClient.disconnect();
+      this.alephClient = null;
+    }
+
+    this.connectionStatus$.next('disconnected');
+    this.activeRooms.clear();
+    this.stopReconnection();
+
+    this.bridgeEvents$.next({
+      type: 'disconnection',
+      timestamp: Date.now()
     });
   }
 
@@ -200,17 +293,7 @@ export class RxjsSocketBridge implements ChannelManager, RoomManager, Reconnecti
    */
   private handleIncomingMessage(message: SocketMessage): void {
     try {
-      // Add timestamp if not present
-      if (!message.timestamp) {
-        message.timestamp = Date.now();
-      }
-
-      // Add unique ID if not present
-      if (!message.id) {
-        message.id = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      }
-
-      console.log('Received message:', message);
+      console.log('📨 Received message:', message);
 
       // Emit to main stream
       this.messageStream$.next(message);
@@ -236,7 +319,7 @@ export class RxjsSocketBridge implements ChannelManager, RoomManager, Reconnecti
       });
 
     } catch (error) {
-      console.error('Error handling incoming message:', error);
+      console.error('❌ Error handling incoming message:', error);
       this.errorStream$.next(error as Error);
     }
   }
@@ -264,7 +347,7 @@ export class RxjsSocketBridge implements ChannelManager, RoomManager, Reconnecti
     });
 
     debouncedEvents$.subscribe(msg => {
-      console.log('Processed health check:', msg);
+      console.log('💓 Processed health check:', msg);
     });
   }
 
@@ -290,32 +373,33 @@ export class RxjsSocketBridge implements ChannelManager, RoomManager, Reconnecti
   }
 
   unsubscribe(channel: ChannelType, callback?: (message: SocketMessage) => void): void {
-    // Note: In a production app, you'd want to manage subscriptions more granularly
-    console.log(`Unsubscribe request for channel: ${channel}`);
+    console.log(`🔕 Unsubscribe request for channel: ${channel}`);
   }
 
   emit(channel: ChannelType, message: SocketMessage): void {
-    if (!this.socket || !this.socket.connected) {
-      console.warn('Cannot emit message: Socket not connected');
+    if (!this.alephClient || !this.alephClient.isConnected()) {
+      console.warn('⚠️ Cannot emit message: AlephScript not connected');
       return;
     }
 
     try {
-      // Ensure message has required fields
-      const enrichedMessage: SocketMessage = {
-        ...message,
-        id: message.id || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        timestamp: message.timestamp || Date.now(),
-        channel
-      };
+      // Convert message to AlephScript format and send
+      switch (message.type) {
+        case MessageType.USER_ACTION:
+          this.alephClient.sendUserInput((message as any).action || 'action');
+          break;
+        case MessageType.BOT_COMMAND:
+          this.alephClient.selectAgent((message as any).botId || 'agent');
+          break;
+        default:
+          // Generic send
+          this.alephClient.sendMessage(message);
+      }
 
-      // Emit to specific channel
-      this.socket.emit(`${channel}_message`, enrichedMessage);
-      
-      console.log('Emitted message to channel:', channel, enrichedMessage);
+      console.log('📤 Emitted message via AlephScript:', channel, message);
 
     } catch (error) {
-      console.error('Error emitting message:', error);
+      console.error('❌ Error emitting message:', error);
       this.errorStream$.next(error as Error);
     }
   }
@@ -326,50 +410,40 @@ export class RxjsSocketBridge implements ChannelManager, RoomManager, Reconnecti
 
   // RoomManager implementation
   async join(roomId: string): Promise<boolean> {
-    return new Promise((resolve) => {
-      if (!this.socket || !this.socket.connected) {
-        console.warn('Cannot join room: Socket not connected');
-        resolve(false);
-        return;
+    try {
+      if (!this.alephClient || !this.alephClient.isConnected()) {
+        console.warn('⚠️ Cannot join room: AlephScript not connected');
+        return false;
       }
 
-      this.socket.emit('join_room', roomId, (success: boolean) => {
-        if (success) {
-          this.activeRooms.add(roomId);
-          console.log('Successfully joined room:', roomId);
-        } else {
-          console.warn('Failed to join room:', roomId);
-        }
-        resolve(success);
-      });
-    });
+      // AlephScript handles rooms automatically, so we just track it
+      this.activeRooms.add(roomId);
+      console.log('🏠 Joined room:', roomId);
+      return true;
+
+    } catch (error) {
+      console.error('❌ Error joining room:', error);
+      return false;
+    }
   }
 
   async leave(roomId: string): Promise<boolean> {
-    return new Promise((resolve) => {
-      if (!this.socket || !this.socket.connected) {
-        console.warn('Cannot leave room: Socket not connected');
-        resolve(false);
-        return;
-      }
+    try {
+      this.activeRooms.delete(roomId);
+      console.log('🚪 Left room:', roomId);
+      return true;
 
-      this.socket.emit('leave_room', roomId, (success: boolean) => {
-        if (success) {
-          this.activeRooms.delete(roomId);
-          console.log('Successfully left room:', roomId);
-        } else {
-          console.warn('Failed to leave room:', roomId);
-        }
-        resolve(success);
-      });
-    });
+    } catch (error) {
+      console.error('❌ Error leaving room:', error);
+      return false;
+    }
   }
 
   getRooms(): Room[] {
     return Array.from(this.activeRooms).map(id => ({
       id,
       name: id,
-      subscribers: 1 // Simplified - in a real app you'd track this
+      subscribers: 1 // Simplified
     }));
   }
 
@@ -388,10 +462,6 @@ export class RxjsSocketBridge implements ChannelManager, RoomManager, Reconnecti
 
   getAttempts(): number {
     return this.reconnectionAttempts;
-  }
-
-  isReconnecting(): boolean {
-    return this.isReconnecting$.value;
   }
 
   // Private helper methods
@@ -418,23 +488,23 @@ export class RxjsSocketBridge implements ChannelManager, RoomManager, Reconnecti
 
     // Exponential backoff
     const delay = Math.min(1000 * Math.pow(2, this.reconnectionAttempts), 30000);
-    
-    console.log(`Attempting reconnection in ${delay}ms (attempt ${this.reconnectionAttempts + 1})`);
+
+    console.log(`🔄 Attempting reconnection in ${delay}ms (attempt ${this.reconnectionAttempts + 1})`);
 
     this.reconnectionTimer = setTimeout(() => {
       this.reconnectionAttempts++;
-      
-      if (this.socket) {
-        this.socket.connect();
+
+      if (this.alephClient) {
+        this.alephClient.connect();
       }
-      
+
       // If this attempt fails, the error handler will trigger another attempt
       setTimeout(() => {
         if (this.connectionStatus$.value !== 'connected') {
           this.isReconnecting$.next(false);
         }
       }, 5000);
-      
+
     }, delay);
   }
 
@@ -450,13 +520,13 @@ export class RxjsSocketBridge implements ChannelManager, RoomManager, Reconnecti
    * Clean up resources
    */
   dispose(): void {
-    console.log('Disposing RxjsSocketBridge');
-    
+    console.log('🧹 Disposing RxjsSocketBridge');
+
     this.destroy$.next();
     this.destroy$.complete();
-    
+
     this.disconnect();
-    
+
     // Complete all subjects
     this.connectionStatus$.complete();
     this.messageStream$.complete();
