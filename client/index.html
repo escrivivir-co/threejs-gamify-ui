@@ -542,10 +542,16 @@
       </div>
     </div>
 
-    <!-- Bot Info Panel -->
-    <div class="bot-info-panel" id="bot-info-panel">
-      <button class="close-btn" onclick="closeBotInfo()">×</button>
-      <h3 id="bot-info-title">Bot Details</h3>
+    <!-- Enhanced Bot Details Panel -->
+    <div class="bot-info-panel draggable-panel" id="bot-info-panel" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20, 0, 40, 0.95); border: 1px solid #9C27B0; border-radius: 8px; min-width: 320px; max-width: 500px; backdrop-filter: blur(10px); color: #F3E5F5; font-family: 'Courier New', monospace; font-size: 12px; z-index: 1001; box-shadow: 0 4px 20px rgba(156, 39, 176, 0.3); resize: both; overflow: hidden; padding: 0; margin: 0; display: none;">
+      <div class="window-header" style="background: linear-gradient(135deg, #7B1FA2, #9C27B0); color: white;">
+        <span id="bot-info-title">📊 Bot Details</span>
+        <div class="window-controls">
+          <button class="window-btn minimize-btn" onclick="toggleWindow('bot-info-panel')" title="Minimize">−</button>
+          <button class="window-btn close-btn" onclick="closeBotInfo()" title="Close">×</button>
+        </div>
+      </div>
+      <div class="window-content" style="padding: 20px; box-sizing: border-box; max-height: 400px; overflow-y: auto;">
       <div class="bot-detail">
         <span class="bot-detail-label">Status:</span>
         <span id="bot-info-status">-</span>
@@ -581,6 +587,7 @@
         <div class="message-input">
           <input type="text" id="message-input" placeholder="Enter message..." style="width: 100%; padding: 6px; margin: 4px 0; border: 1px solid #4CAF50; background: rgba(0,0,0,0.8); color: #fff;">
           <button class="control-button" onclick="sendSpiralMessage()" id="send-message-btn" style="width: 100%; margin-top: 4px;">Send via Spiral</button>
+        </div>
         </div>
       </div>
     </div>
