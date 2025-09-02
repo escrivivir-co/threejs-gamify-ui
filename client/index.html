@@ -215,7 +215,9 @@
       </div>
     </div>
 
-    <!-- Removed React main.tsx reference to avoid mounting errors --></script>
+    <!-- Three.js and Socket.io from CDN for reliable loading -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r158/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.js"></script>
     
     <script>
       // Initialize the ThreeGamificationUI application
@@ -232,37 +234,169 @@
         if (loading) loading.style.display = 'none';
         if (app) app.style.display = 'flex';
         
-        // Create basic mock functionality
-        const mockBots = [
-          { id: 'bot-n1', name: 'North 1', cardinal: 'North', status: 'inactive' },
-          { id: 'bot-n2', name: 'North 2', cardinal: 'North', status: 'inactive' },
-          { id: 'bot-s1', name: 'South 1', cardinal: 'South', status: 'inactive' },
-          { id: 'bot-s2', name: 'South 2', cardinal: 'South', status: 'inactive' },
-          { id: 'bot-e1', name: 'East 1', cardinal: 'East', status: 'inactive' },
-          { id: 'bot-e2', name: 'East 2', cardinal: 'East', status: 'inactive' },
-          { id: 'bot-w1', name: 'West 1', cardinal: 'West', status: 'inactive' },
-          { id: 'bot-w2', name: 'West 2', cardinal: 'West', status: 'inactive' }
-        ];
+        // Bot configuration
+        window.bots = new Map([
+          ['bot-n1', { id: 'bot-n1', name: 'North 1', cardinal: 'North', status: 'inactive', position: { x: 0, y: 2, z: 8 } }],
+          ['bot-n2', { id: 'bot-n2', name: 'North 2', cardinal: 'North', status: 'inactive', position: { x: 0, y: 4, z: 12 } }],
+          ['bot-s1', { id: 'bot-s1', name: 'South 1', cardinal: 'South', status: 'inactive', position: { x: 0, y: 2, z: -8 } }],
+          ['bot-s2', { id: 'bot-s2', name: 'South 2', cardinal: 'South', status: 'inactive', position: { x: 0, y: 4, z: -12 } }],
+          ['bot-e1', { id: 'bot-e1', name: 'East 1', cardinal: 'East', status: 'inactive', position: { x: 8, y: 2, z: 0 } }],
+          ['bot-e2', { id: 'bot-e2', name: 'East 2', cardinal: 'East', status: 'inactive', position: { x: 12, y: 4, z: 0 } }],
+          ['bot-w1', { id: 'bot-w1', name: 'West 1', cardinal: 'West', status: 'inactive', position: { x: -8, y: 2, z: 0 } }],
+          ['bot-w2', { id: 'bot-w2', name: 'West 2', cardinal: 'West', status: 'inactive', position: { x: -12, y: 4, z: 0 } }]
+        ]);
 
-        // Populate bot list
-        const botList = document.getElementById('bot-list');
-        botList.innerHTML = mockBots.map(bot => `
-          <div class="bot-item">
-            <span>${bot.name} (${bot.cardinal})</span>
-            <span class="status-${bot.status}">${bot.status.toUpperCase()}</span>
-            <button class="${bot.status === 'active' ? 'stop-btn' : 'start-btn'} control-button" 
-                    onclick="toggleBot('${bot.id}', this)">
-              ${bot.status === 'active' ? 'Stop' : 'Start'}
-            </button>
-          </div>
-        `).join('');
+        // Initialize Three.js 3D scene
+        if (typeof THREE !== 'undefined') {
+          initThreeScene();
+          addMessage('Three.js 3D visualization initialized successfully', 'sys');
+        } else {
+          createSimpleScene();
+          addMessage('Three.js not available, using 2D fallback', 'sys');
+        }
 
-        // Add message
-        addMessage('Fallback mode initialized - Angular components loaded', 'ui');
-        addMessage('3D visualization pending Three.js initialization...', 'sys');
+        // Initialize Socket.io (defined below)
+        setTimeout(initSocket, 100);
         
-        // Simple 3D scene placeholder
-        createSimpleScene();
+        // Populate bot list
+        updateBotList();
+        
+        addMessage('ThreeGamificationUI system initialized', 'ui');
+      }
+
+      // Three.js 3D Scene Implementation
+      function initThreeScene() {
+        const canvas = document.getElementById('three-canvas');
+        const container = canvas.parentElement;
+
+        // Scene setup
+        window.scene = new THREE.Scene();
+        window.scene.background = new THREE.Color(0x111827);
+
+        // Camera setup
+        window.camera = new THREE.PerspectiveCamera(
+          75, 
+          container.clientWidth / container.clientHeight, 
+          0.1, 
+          1000
+        );
+        window.camera.position.set(15, 15, 15);
+        window.camera.lookAt(0, 0, 0);
+
+        // Renderer setup
+        window.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        window.renderer.setSize(container.clientWidth, container.clientHeight);
+        window.renderer.setPixelRatio(window.devicePixelRatio);
+        window.renderer.shadowMap.enabled = true;
+        window.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+        window.scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(10, 10, 5);
+        directionalLight.castShadow = true;
+        window.scene.add(directionalLight);
+
+        // Create central Socket.io hub
+        createCentralHub();
+        
+        // Create bot positions
+        createBotPositions();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+          window.camera.aspect = container.clientWidth / container.clientHeight;
+          window.camera.updateProjectionMatrix();
+          window.renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+
+        // Start animation loop
+        animate();
+      }
+
+      function createCentralHub() {
+        const hubGeometry = new THREE.SphereGeometry(1, 16, 16);
+        const hubMaterial = new THREE.MeshPhongMaterial({ 
+          color: 0x00ff88,
+          transparent: true,
+          opacity: 0.8
+        });
+        window.hub = new THREE.Mesh(hubGeometry, hubMaterial);
+        window.hub.position.set(0, 0, 0);
+        window.scene.add(window.hub);
+      }
+
+      function createBotPositions() {
+        window.botMeshes = new Map();
+        
+        window.bots.forEach((bot, botId) => {
+          // Bot mesh
+          const geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+          const material = new THREE.MeshPhongMaterial({ 
+            color: getBotColor(bot.cardinal),
+            transparent: true,
+            opacity: 0.7
+          });
+          const botMesh = new THREE.Mesh(geometry, material);
+          botMesh.position.set(bot.position.x, bot.position.y, bot.position.z);
+          botMesh.userData = { botId, originalPosition: { ...bot.position } };
+          
+          window.scene.add(botMesh);
+          window.botMeshes.set(botId, botMesh);
+
+          // Connection line to hub
+          const lineGeometry = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(bot.position.x, bot.position.y, bot.position.z)
+          ]);
+          const lineMaterial = new THREE.LineBasicMaterial({ 
+            color: getBotColor(bot.cardinal),
+            opacity: 0.3,
+            transparent: true
+          });
+          const line = new THREE.Line(lineGeometry, lineMaterial);
+          window.scene.add(line);
+
+          bot.line = line;
+          bot.mesh = botMesh;
+        });
+      }
+
+      function getBotColor(cardinal) {
+        const colors = {
+          'North': 0xff4444,
+          'South': 0x44ff44,
+          'East': 0x4444ff,
+          'West': 0xffff44
+        };
+        return colors[cardinal] || 0xffffff;
+      }
+
+      function animate() {
+        if (!window.renderer || !window.scene || !window.camera) return;
+        
+        requestAnimationFrame(animate);
+
+        // Hub pulsing animation
+        if (window.hub) {
+          const time = Date.now() * 0.002;
+          const scale = 1 + Math.sin(time) * 0.1;
+          window.hub.scale.setScalar(scale);
+        }
+
+        // Bot bobbing animation
+        const time = Date.now() * 0.001;
+        window.botMeshes.forEach((botMesh, botId) => {
+          if (botMesh.userData.originalPosition) {
+            const bobOffset = Math.sin(time + Math.random()) * 0.2;
+            botMesh.position.y = botMesh.userData.originalPosition.y + bobOffset;
+          }
+        });
+
+        // Render
+        window.renderer.render(window.scene, window.camera);
       }
 
       function createSimpleScene() {
@@ -321,18 +455,129 @@
         addMessage('2D visualization active - 3D mode requires Three.js', 'sys');
       }
 
+      function initSocket() {
+        if (typeof io === 'undefined') {
+          addMessage('Socket.io not available - using mock mode', 'sys');
+          return;
+        }
+
+        window.socket = io('/', {
+          transports: ['websocket', 'polling']
+        });
+
+        window.socket.on('connect', () => {
+          console.log('Socket connected:', window.socket.id);
+          addMessage('Socket.io connection established', 'sys');
+        });
+
+        window.socket.on('disconnect', () => {
+          console.log('Socket disconnected');
+          addMessage('Socket.io connection lost', 'sys');
+        });
+
+        window.socket.on('bot:status', (data) => {
+          updateBotStatus(data.botId, data.status);
+          addMessage(`Bot ${data.botId}: ${data.status}`, 'app');
+        });
+
+        window.socket.on('message', (data) => {
+          addMessage(`${data.botId}: ${data.message}`, data.channel || 'app');
+          if (typeof THREE !== 'undefined') {
+            animateMessageParticle(data.botId);
+          }
+        });
+      }
+
+      function updateBotList() {
+        const botList = document.getElementById('bot-list');
+        botList.innerHTML = '';
+
+        window.bots.forEach((bot, botId) => {
+          const botItem = document.createElement('div');
+          botItem.className = 'bot-item';
+          botItem.innerHTML = `
+            <span>${bot.name} (${bot.cardinal})</span>
+            <span class="status-${bot.status}">${bot.status.toUpperCase()}</span>
+            <button class="${bot.status === 'active' ? 'stop-btn' : 'start-btn'} control-button" 
+                    onclick="toggleBot('${botId}', this)">
+              ${bot.status === 'active' ? 'Stop' : 'Start'}
+            </button>
+          `;
+          botList.appendChild(botItem);
+        });
+      }
+
+      function animateMessageParticle(botId) {
+        const bot = window.bots.get(botId);
+        if (!bot || !bot.mesh) return;
+
+        // Create particle
+        const particleGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+        const particleMaterial = new THREE.MeshBasicMaterial({ 
+          color: getBotColor(bot.cardinal),
+          transparent: true,
+          opacity: 0.8
+        });
+        const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+        
+        // Start at bot position
+        particle.position.copy(bot.mesh.position);
+        window.scene.add(particle);
+
+        // Animate to center
+        const startPos = bot.mesh.position.clone();
+        const endPos = new THREE.Vector3(0, 0, 0);
+        let progress = 0;
+
+        const animateParticle = () => {
+          progress += 0.05;
+          
+          if (progress >= 1) {
+            window.scene.remove(particle);
+            return;
+          }
+
+          // Lerp position with slight curve
+          particle.position.lerpVectors(startPos, endPos, progress);
+          particle.position.y += Math.sin(progress * Math.PI) * 2;
+          
+          requestAnimationFrame(animateParticle);
+        };
+
+        animateParticle();
+      }
+
       function toggleBot(botId, button) {
         const isActive = button.classList.contains('stop-btn');
         const newStatus = isActive ? 'inactive' : 'active';
+        const action = isActive ? 'stop' : 'start';
         
-        button.textContent = isActive ? 'Start' : 'Stop';
-        button.className = `control-button ${isActive ? 'start-btn' : 'stop-btn'}`;
+        // Emit to server if connected
+        if (window.socket && window.socket.connected) {
+          window.socket.emit('bot:control', { botId, action, status: newStatus });
+        }
         
-        const statusSpan = button.previousElementSibling;
-        statusSpan.textContent = newStatus.toUpperCase();
-        statusSpan.className = `status-${newStatus}`;
-        
-        addMessage(`Bot ${botId} ${isActive ? 'stopped' : 'started'}`, 'ui');
+        // Update local state immediately
+        updateBotStatus(botId, newStatus);
+        addMessage(`Bot ${botId} ${action} command sent`, 'ui');
+      }
+
+      function updateBotStatus(botId, status) {
+        const bot = window.bots.get(botId);
+        if (bot) {
+          bot.status = status;
+          
+          // Update 3D visualization
+          if (bot.mesh) {
+            bot.mesh.material.opacity = status === 'active' ? 1.0 : 0.5;
+          }
+          if (bot.line) {
+            bot.line.material.opacity = status === 'active' ? 0.6 : 0.2;
+          }
+          
+          // Update UI
+          updateBotList();
+        }
       }
 
       function addMessage(message, channel = 'app') {
