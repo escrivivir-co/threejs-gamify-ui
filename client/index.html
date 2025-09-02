@@ -498,7 +498,7 @@
       </div>
       
       <!-- Movable Bot Management Panel -->
-      <div id="bot-management-panel" class="draggable-panel" style="position: fixed; top: 20px; right: 20px; background: rgba(0, 20, 40, 0.95); border: 1px solid #4CAF50; border-radius: 8px; min-width: 280px; max-width: 400px; backdrop-filter: blur(10px); color: #E8F5E8; font-family: 'Courier New', monospace; font-size: 12px; z-index: 1000; box-shadow: 0 4px 20px rgba(76, 175, 80, 0.3); resize: both; overflow: hidden;">
+      <div id="bot-management-panel" class="draggable-panel" style="position: fixed; top: 20px; right: 20px; background: rgba(0, 20, 40, 0.95); border: 1px solid #4CAF50; border-radius: 8px; min-width: 280px; max-width: 400px; backdrop-filter: blur(10px); color: #E8F5E8; font-family: 'Courier New', monospace; font-size: 12px; z-index: 1000; box-shadow: 0 4px 20px rgba(76, 175, 80, 0.3); resize: both; overflow: hidden; padding: 0; margin: 0;">
         <div class="window-header">
           <span>🤖 Bot Management</span>
           <div class="window-controls">
@@ -506,7 +506,7 @@
             <button class="window-btn close-btn" onclick="hidePanel('bot-management-panel')" title="Close">×</button>
           </div>
         </div>
-        <div class="window-content" style="padding: 15px; max-height: 300px; overflow-y: auto;">
+        <div class="window-content" style="padding: 20px; max-height: 300px; overflow-y: auto; box-sizing: border-box;">
           <div id="bot-list">
             <div style="text-align: center; opacity: 0.6; padding: 20px;">
               Connecting to bots...
@@ -516,7 +516,7 @@
       </div>
       
       <!-- Movable Message Streaming Panel -->
-      <div id="message-streaming-panel" class="draggable-panel" style="position: fixed; bottom: 20px; left: 20px; background: rgba(40, 20, 0, 0.95); border: 1px solid #FF9800; border-radius: 8px; backdrop-filter: blur(10px); color: #FFF3E0; width: 400px; height: 250px; z-index: 999; box-shadow: 0 4px 20px rgba(255, 152, 0, 0.3); resize: both; overflow: hidden;">
+      <div id="message-streaming-panel" class="draggable-panel" style="position: fixed; bottom: 20px; left: 20px; background: rgba(40, 20, 0, 0.95); border: 1px solid #FF9800; border-radius: 8px; backdrop-filter: blur(10px); color: #FFF3E0; width: 400px; height: 250px; z-index: 999; box-shadow: 0 4px 20px rgba(255, 152, 0, 0.3); resize: both; overflow: hidden; padding: 0; margin: 0;">
         <div class="window-header">
           <span>💬 Message Streaming</span>
           <div class="window-controls">
@@ -524,7 +524,7 @@
             <button class="window-btn close-btn" onclick="hidePanel('message-streaming-panel')" title="Close">×</button>
           </div>
         </div>
-        <div class="window-content" style="padding: 15px; height: calc(100% - 50px); display: flex; flex-direction: column;">
+        <div class="window-content" style="padding: 20px; height: calc(100% - 50px); display: flex; flex-direction: column; box-sizing: border-box;">
           <div class="message-log" id="message-log" style="flex: 1; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 4px; margin-bottom: 10px; font-family: monospace; font-size: 11px;">
             <div class="message-item message-sys">[System] Initializing...</div>
           </div>
@@ -3300,32 +3300,56 @@
       let dragOffset = { x: 0, y: 0 };
       
       function initializeDraggableWindows() {
-        const draggableElements = document.querySelectorAll('.draggable-panel');
-        
-        draggableElements.forEach(element => {
-          const header = element.querySelector('.window-header');
-          if (header) {
-            header.addEventListener('mousedown', startDrag);
-          }
-        });
-        
-        // Global event listeners
-        document.addEventListener('mousemove', drag);
-        document.addEventListener('mouseup', stopDrag);
+        // Wait for DOM to be ready
+        setTimeout(() => {
+          const draggableElements = document.querySelectorAll('.draggable-panel');
+          console.log('Initializing draggable windows:', draggableElements.length);
+          
+          draggableElements.forEach(element => {
+            const header = element.querySelector('.window-header');
+            if (header) {
+              header.style.cursor = 'grab';
+              header.style.userSelect = 'none';
+              header.addEventListener('mousedown', startDrag);
+              console.log('Added drag listener to:', element.id);
+            } else {
+              console.warn('No window-header found for:', element.id);
+            }
+          });
+          
+          // Global event listeners
+          document.addEventListener('mousemove', drag);
+          document.addEventListener('mouseup', stopDrag);
+        }, 100);
       }
       
       function startDrag(e) {
+        // Don't drag if clicking on window control buttons
+        if (e.target.classList.contains('window-btn')) return;
+        
         draggedElement = e.target.closest('.draggable-panel');
         if (!draggedElement) return;
         
+        // Ensure proper positioning for dragging
         const rect = draggedElement.getBoundingClientRect();
+        if (!draggedElement.style.left || draggedElement.style.left === 'auto') {
+          draggedElement.style.left = rect.left + 'px';
+          draggedElement.style.top = rect.top + 'px';
+          draggedElement.style.right = 'auto';
+          draggedElement.style.bottom = 'auto';
+        }
+        
         dragOffset.x = e.clientX - rect.left;
         dragOffset.y = e.clientY - rect.top;
         
         draggedElement.classList.add('dragging');
         draggedElement.style.zIndex = '10000';
         
-        // Prevent text selection during drag
+        // Set cursor on header
+        const header = draggedElement.querySelector('.window-header');
+        if (header) header.style.cursor = 'grabbing';
+        
+        console.log('Started dragging:', draggedElement.id);
         e.preventDefault();
       }
       
@@ -3475,7 +3499,17 @@
       
       function saveWindowState(windowId) {
         const windowEl = document.getElementById(windowId);
-        if (!windowEl || !window.windowStates[windowId]) return;
+        if (!windowEl) return;
+        
+        // Initialize windowStates if not exists
+        if (!window.windowStates) {
+          window.windowStates = {};
+        }
+        
+        // Initialize specific window state if not exists
+        if (!window.windowStates[windowId]) {
+          window.windowStates[windowId] = { visible: true, collapsed: false, position: { x: null, y: null } };
+        }
         
         const rect = windowEl.getBoundingClientRect();
         window.windowStates[windowId] = {
