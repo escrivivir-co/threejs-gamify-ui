@@ -409,6 +409,8 @@
             <button class="nav-btn" onclick="syncRemoteBots()" title="Sync Remote Bots">🔄 Sync Bots</button>
             <button class="nav-btn" onclick="showRoomActivity()" title="Show Room Activity">🏠 Rooms</button>
             <button class="nav-btn" onclick="toggleRealTimeStats()" title="Toggle Real-time Stats">📊 Stats</button>
+            <button class="nav-btn" onclick="showActivityAnalytics()" title="Show Activity Analytics">📈 Analytics</button>
+            <button class="nav-btn" onclick="toggleQualityMode()" title="Toggle Performance Mode">⚡ Performance</button>
           </div>
         </div>
 
@@ -1154,8 +1156,28 @@
             roomData.lastActivity = Date.now();
           }
           
-          // Animate message particle if Three.js is available
+          // Record analytics and create enhanced visual effects
+          updateAnalyticsOnMessage(data.botId, data.message, data.to);
+          
           if (typeof THREE !== 'undefined') {
+            const bot = window.bots.get(data.botId);
+            if (bot && bot.mesh) {
+              // Create message burst effect
+              createMessageBurstEffect(bot.mesh.position, data.botId, data.message);
+              
+              // Create floating text for important messages
+              if (data.message.length < 30) {
+                createFloatingTextEffect(bot.mesh.position, data.message, getBotColor(bot.cardinal));
+              }
+              
+              // Create connection effect if target specified
+              if (data.to && window.bots.has(data.to)) {
+                const targetBot = window.bots.get(data.to);
+                createActiveConnectionEffect(bot, targetBot);
+              }
+            }
+            
+            // Also run traditional particle animation
             animateMessageParticle(data.botId);
           }
         });
@@ -1281,6 +1303,134 @@
           
           return basePos;
         }
+      }
+      
+      // Render bots in the 3D scene with enhanced positioning
+      function renderBots() {
+        // Clear existing bot meshes
+        window.bots.forEach(bot => {
+          if (bot.mesh) {
+            window.scene.remove(bot.mesh);
+          }
+          if (bot.line) {
+            window.scene.remove(bot.line);
+          }
+        });
+        
+        // Group bots by cardinal and render in activity-ordered spirals
+        const cardinalGroups = {
+          north: [],
+          south: [],
+          east: [],
+          west: []
+        };
+        
+        // Group bots by cardinal
+        window.bots.forEach((bot, botId) => {
+          const cardinal = bot.cardinal || assignCardinal(botId);
+          bot.cardinal = cardinal;
+          cardinalGroups[cardinal].push({ botId, bot });
+        });
+        
+        // Render each cardinal group in spiral formation
+        Object.keys(cardinalGroups).forEach(cardinal => {
+          const bots = cardinalGroups[cardinal];
+          
+          // Sort by message activity (most active closest to cardinal point)
+          bots.sort((a, b) => {
+            const aActivity = window.messageCounters.get(a.botId) || 0;
+            const bActivity = window.messageCounters.get(b.botId) || 0;
+            return bActivity - aActivity;
+          });
+          
+          // Position bots in spiral formation
+          bots.forEach((botData, spiralIndex) => {
+            const { botId, bot } = botData;
+            const position = getBotSpiralPosition(cardinal, spiralIndex, bots.length);
+            
+            bot.position = position;
+            bot.spiralIndex = spiralIndex;
+            window.botPositions.set(botId, position);
+            
+            // Create enhanced bot mesh with cardinal-specific styling
+            const geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+            const material = new THREE.MeshBasicMaterial({
+              color: getBotColor(cardinal),
+              transparent: true,
+              opacity: bot.status === 'active' ? 1.0 : 0.5
+            });
+            
+            // Add activity-based glow for highly active bots
+            const messageCount = window.messageCounters.get(botId) || 0;
+            if (messageCount > 5) {
+              material.emissive = new THREE.Color(0x111111);
+            }
+            
+            bot.mesh = new THREE.Mesh(geometry, material);
+            bot.mesh.position.copy(position);
+            bot.mesh.userData.botId = botId;
+            bot.mesh.userData.cardinal = cardinal;
+            bot.mesh.userData.room = bot.room;
+            bot.mesh.userData.cullable = true; // Mark for frustum culling
+            window.scene.add(bot.mesh);
+            
+            // Create connection line to cardinal point then to center
+            const cardinalPoint = getCardinalPosition(cardinal);
+            const lineGeometry = new THREE.BufferGeometry().setFromPoints([
+              position,
+              cardinalPoint,
+              new THREE.Vector3(0, 0, 0)
+            ]);
+            const lineMaterial = new THREE.LineBasicMaterial({
+              color: getBotColor(cardinal),
+              transparent: true,
+              opacity: bot.status === 'active' ? 0.6 : 0.2
+            });
+            
+            bot.line = new THREE.Line(lineGeometry, lineMaterial);
+            bot.line.userData.cullable = true; // Mark for frustum culling
+            window.scene.add(bot.line);
+          });
+        });
+      }
+      
+      // Get bot position in cardinal spiral formation
+      function getBotSpiralPosition(cardinal, spiralIndex, totalInCardinal) {
+        const baseDistance = 8;
+        const spiralSpacing = 1.5;
+        const maxSpiralRadius = 3;
+        
+        // Calculate spiral parameters
+        const angle = (spiralIndex * Math.PI * 2) / Math.max(totalInCardinal, 4);
+        const spiralRadius = Math.min(spiralIndex * spiralSpacing, maxSpiralRadius);
+        const distance = baseDistance + spiralRadius;
+        
+        let basePosition;
+        switch (cardinal.toLowerCase()) {
+          case 'north':
+            basePosition = new THREE.Vector3(0, 0, -distance);
+            break;
+          case 'south':
+            basePosition = new THREE.Vector3(0, 0, distance);
+            break;
+          case 'east':
+            basePosition = new THREE.Vector3(distance, 0, 0);
+            break;
+          case 'west':
+            basePosition = new THREE.Vector3(-distance, 0, 0);
+            break;
+          default:
+            basePosition = new THREE.Vector3(distance, 0, 0);
+        }
+        
+        // Add spiral offset
+        const spiralOffset = new THREE.Vector3(
+          Math.cos(angle) * spiralRadius,
+          0,
+          Math.sin(angle) * spiralRadius
+        );
+        
+        return basePosition.clone().add(spiralOffset);
       }
 
       function updateBotList() {
@@ -1532,9 +1682,10 @@
         // Clear input and update counters
         document.getElementById('message-input').value = '';
         
-        // Update message counter
+        // Update message counter and record analytics
         const currentCount = window.messageCounters.get(sourceBot) || 0;
         window.messageCounters.set(sourceBot, currentCount + 1);
+        updateAnalyticsOnMessage(sourceBot, messageContent.trim(), targetBotId);
         
         // Update the info panel if showing this bot
         if (window.selectedBot === sourceBot) {
@@ -1687,8 +1838,117 @@
         }
         
         // Start animation
-        addMessage(`🚀 Message particle launched from ${fromId}`, 'app');
+        addMessage(`🚀 Enhanced spiral message trajectory: ${fromId} → ${toId}`, 'app');
         animateParticle();
+      }
+      
+      // Enhanced physics functions for realistic spiral motion
+      function createSpiralApproach(start, end, spiralTurns = 2) {
+        const points = [];
+        const steps = 15;
+        const axis = end.clone().sub(start).normalize();
+        const perpendicular = new THREE.Vector3(1, 0, 0).cross(axis).normalize();
+        if (perpendicular.length() < 0.1) {
+          perpendicular.set(0, 1, 0).cross(axis).normalize();
+        }
+        const perpendicular2 = axis.clone().cross(perpendicular).normalize();
+        
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps;
+          const angle = t * Math.PI * 2 * spiralTurns;
+          const radius = (1 - t) * 1.5; // Spiral inward
+          
+          const spiralOffset = perpendicular.clone().multiplyScalar(Math.cos(angle) * radius)
+            .add(perpendicular2.clone().multiplyScalar(Math.sin(angle) * radius));
+          
+          const point = start.clone().lerp(end, easeInOutCubic(t)).add(spiralOffset);
+          points.push(point);
+        }
+        
+        return points;
+      }
+      
+      function createSpiralDeparture(start, end, spiralTurns = 2) {
+        const points = [];
+        const steps = 15;
+        const axis = end.clone().sub(start).normalize();
+        const perpendicular = new THREE.Vector3(1, 0, 0).cross(axis).normalize();
+        if (perpendicular.length() < 0.1) {
+          perpendicular.set(0, 1, 0).cross(axis).normalize();
+        }
+        const perpendicular2 = axis.clone().cross(perpendicular).normalize();
+        
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps;
+          const angle = t * Math.PI * 2 * spiralTurns;
+          const radius = t * 1.5; // Spiral outward
+          
+          const spiralOffset = perpendicular.clone().multiplyScalar(Math.cos(angle) * radius)
+            .add(perpendicular2.clone().multiplyScalar(Math.sin(angle) * radius));
+          
+          const point = start.clone().lerp(end, easeInOutCubic(t)).add(spiralOffset);
+          points.push(point);
+        }
+        
+        return points;
+      }
+      
+      // Easing function for smooth realistic motion
+      function easeInOutCubic(t) {
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      }
+      
+      // Create arrival burst effect
+      function createArrivalEffect(position, botId) {
+        if (!window.messageTrailsVisible) return;
+        
+        const bot = window.bots.get(botId);
+        const burstColor = bot ? getBotColor(bot.cardinal) : 0x4CAF50;
+        
+        // Create burst particles
+        const burstCount = 8;
+        for (let i = 0; i < burstCount; i++) {
+          const burstGeometry = new THREE.SphereGeometry(0.08, 8, 8);
+          const burstMaterial = new THREE.MeshBasicMaterial({
+            color: burstColor,
+            transparent: true,
+            opacity: 0.9
+          });
+          
+          const burstParticle = new THREE.Mesh(burstGeometry, burstMaterial);
+          burstParticle.position.copy(position);
+          
+          // Random burst direction
+          const angle = (i / burstCount) * Math.PI * 2;
+          const direction = new THREE.Vector3(
+            Math.cos(angle) + (Math.random() - 0.5) * 0.5,
+            Math.random() * 0.5 + 0.2,
+            Math.sin(angle) + (Math.random() - 0.5) * 0.5
+          ).normalize();
+          
+          window.scene.add(burstParticle);
+          
+          // Animate burst particle
+          let burstProgress = 0;
+          const burstSpeed = 0.04;
+          const burstDistance = 1.5;
+          
+          function animateBurst() {
+            if (burstProgress >= 1) {
+              window.scene.remove(burstParticle);
+              return;
+            }
+            
+            burstParticle.position.add(direction.clone().multiplyScalar(burstSpeed * burstDistance));
+            burstMaterial.opacity = 0.9 * (1 - burstProgress * burstProgress);
+            burstParticle.scale.setScalar(1 + burstProgress * 0.5);
+            burstProgress += 0.025;
+            
+            requestAnimationFrame(animateBurst);
+          }
+          
+          setTimeout(() => animateBurst(), i * 30); // Stagger burst timing
+        }
       }
       
       // Enhanced Footer Navigation Functions
@@ -2007,6 +2267,867 @@
         const overlay = document.getElementById('stats-overlay');
         if (overlay) overlay.remove();
       }
+      
+      // Advanced Bot Activity Analytics System
+      
+      // Track detailed bot activity metrics
+      window.botAnalytics = {
+        messageHistory: new Map(), // botId -> [{timestamp, content, target}]
+        activityPatterns: new Map(), // botId -> {hourly: [], daily: [], peaks: []}
+        communicationGraph: new Map(), // botId -> {targets: Map, sources: Map}
+        performanceMetrics: new Map(), // botId -> {avgResponseTime, reliability, uptime}
+        cardinalAnalytics: {
+          north: { totalMessages: 0, avgActivity: 0, peakTime: null },
+          south: { totalMessages: 0, avgActivity: 0, peakTime: null },
+          east: { totalMessages: 0, avgActivity: 0, peakTime: null },
+          west: { totalMessages: 0, avgActivity: 0, peakTime: null }
+        }
+      };
+      
+      // Initialize analytics for a bot
+      function initBotAnalytics(botId) {
+        if (!window.botAnalytics.messageHistory.has(botId)) {
+          window.botAnalytics.messageHistory.set(botId, []);
+          window.botAnalytics.activityPatterns.set(botId, {
+            hourly: new Array(24).fill(0),
+            daily: new Array(7).fill(0),
+            peaks: []
+          });
+          window.botAnalytics.communicationGraph.set(botId, {
+            targets: new Map(),
+            sources: new Map()
+          });
+          window.botAnalytics.performanceMetrics.set(botId, {
+            avgResponseTime: 0,
+            reliability: 1.0,
+            uptime: 0,
+            startTime: Date.now()
+          });
+        }
+      }
+      
+      // Record bot message activity
+      function recordBotActivity(botId, messageContent, targetBotId = null) {
+        initBotAnalytics(botId);
+        
+        const timestamp = Date.now();
+        const hour = new Date(timestamp).getHours();
+        const day = new Date(timestamp).getDay();
+        
+        // Record message history
+        const messageHistory = window.botAnalytics.messageHistory.get(botId);
+        messageHistory.push({
+          timestamp: timestamp,
+          content: messageContent,
+          target: targetBotId,
+          length: messageContent.length
+        });
+        
+        // Keep only recent 100 messages
+        if (messageHistory.length > 100) {
+          messageHistory.shift();
+        }
+        
+        // Update activity patterns
+        const patterns = window.botAnalytics.activityPatterns.get(botId);
+        patterns.hourly[hour]++;
+        patterns.daily[day]++;
+        
+        // Record communication graph
+        if (targetBotId) {
+          const commGraph = window.botAnalytics.communicationGraph.get(botId);
+          const currentCount = commGraph.targets.get(targetBotId) || 0;
+          commGraph.targets.set(targetBotId, currentCount + 1);
+          
+          // Record reverse relationship
+          initBotAnalytics(targetBotId);
+          const targetCommGraph = window.botAnalytics.communicationGraph.get(targetBotId);
+          const sourceCount = targetCommGraph.sources.get(botId) || 0;
+          targetCommGraph.sources.set(botId, sourceCount + 1);
+        }
+        
+        // Update cardinal analytics
+        const bot = window.bots.get(botId);
+        if (bot && bot.cardinal) {
+          window.botAnalytics.cardinalAnalytics[bot.cardinal].totalMessages++;
+          window.botAnalytics.cardinalAnalytics[bot.cardinal].avgActivity = 
+            calculateCardinalAverageActivity(bot.cardinal);
+        }
+        
+        // Check for activity peaks
+        detectActivityPeak(botId, timestamp);
+      }
+      
+      // Calculate average activity for a cardinal direction
+      function calculateCardinalAverageActivity(cardinal) {
+        const cardinalBots = Array.from(window.bots.values())
+          .filter(bot => bot.cardinal === cardinal);
+        
+        if (cardinalBots.length === 0) return 0;
+        
+        const totalMessages = cardinalBots.reduce((sum, bot) => {
+          return sum + (window.messageCounters.get(bot.id) || 0);
+        }, 0);
+        
+        return totalMessages / cardinalBots.length;
+      }
+      
+      // Detect activity peaks and anomalies
+      function detectActivityPeak(botId, timestamp) {
+        const messageHistory = window.botAnalytics.messageHistory.get(botId);
+        if (messageHistory.length < 5) return;
+        
+        // Check if current activity is significantly higher than average
+        const recentWindow = messageHistory.slice(-5);
+        const recentTimestamps = recentWindow.map(msg => msg.timestamp);
+        const timeSpan = Math.max(...recentTimestamps) - Math.min(...recentTimestamps);
+        
+        if (timeSpan < 30000) { // 30 seconds
+          // High activity detected
+          const patterns = window.botAnalytics.activityPatterns.get(botId);
+          patterns.peaks.push({
+            timestamp: timestamp,
+            intensity: recentWindow.length,
+            duration: timeSpan
+          });
+          
+          // Keep only recent peaks
+          if (patterns.peaks.length > 10) {
+            patterns.peaks.shift();
+          }
+          
+          // Notify about peak activity
+          addMessage(`📊 Activity peak detected for bot ${botId}: ${recentWindow.length} messages in ${Math.round(timeSpan/1000)}s`, 'analytics');
+        }
+      }
+      
+      // Generate comprehensive activity report
+      function generateActivityReport() {
+        const report = {
+          timestamp: Date.now(),
+          totalBots: window.bots.size,
+          totalMessages: Array.from(window.messageCounters.values()).reduce((sum, count) => sum + count, 0),
+          cardinalDistribution: {},
+          topCommunicators: [],
+          activityTrends: {},
+          performanceMetrics: {}
+        };
+        
+        // Cardinal distribution analysis
+        Object.keys(window.botAnalytics.cardinalAnalytics).forEach(cardinal => {
+          const cardinalData = window.botAnalytics.cardinalAnalytics[cardinal];
+          report.cardinalDistribution[cardinal] = {
+            totalMessages: cardinalData.totalMessages,
+            avgActivity: cardinalData.avgActivity,
+            botCount: Array.from(window.bots.values()).filter(bot => bot.cardinal === cardinal).length
+          };
+        });
+        
+        // Top communicators
+        const botActivityScores = [];
+        window.bots.forEach((bot, botId) => {
+          const messageCount = window.messageCounters.get(botId) || 0;
+          const commGraph = window.botAnalytics.communicationGraph.get(botId);
+          const uniqueTargets = commGraph ? commGraph.targets.size : 0;
+          const uniqueSources = commGraph ? commGraph.sources.size : 0;
+          
+          botActivityScores.push({
+            botId: botId,
+            messageCount: messageCount,
+            uniqueTargets: uniqueTargets,
+            uniqueSources: uniqueSources,
+            networkScore: messageCount + (uniqueTargets * 2) + (uniqueSources * 1.5),
+            cardinal: bot.cardinal
+          });
+        });
+        
+        report.topCommunicators = botActivityScores
+          .sort((a, b) => b.networkScore - a.networkScore)
+          .slice(0, 5);
+        
+        // Activity trends (last hour)
+        const now = Date.now();
+        const oneHourAgo = now - 3600000;
+        
+        window.botAnalytics.messageHistory.forEach((history, botId) => {
+          const recentMessages = history.filter(msg => msg.timestamp >= oneHourAgo);
+          if (recentMessages.length > 0) {
+            report.activityTrends[botId] = {
+              messagesLastHour: recentMessages.length,
+              avgMessageLength: recentMessages.reduce((sum, msg) => sum + msg.length, 0) / recentMessages.length,
+              trend: calculateActivityTrend(botId, recentMessages)
+            };
+          }
+        });
+        
+        return report;
+      }
+      
+      // Calculate activity trend (increasing, decreasing, stable)
+      function calculateActivityTrend(botId, recentMessages) {
+        if (recentMessages.length < 6) return 'stable';
+        
+        const firstHalf = recentMessages.slice(0, Math.floor(recentMessages.length / 2));
+        const secondHalf = recentMessages.slice(Math.floor(recentMessages.length / 2));
+        
+        const firstHalfDensity = firstHalf.length / ((firstHalf[firstHalf.length - 1].timestamp - firstHalf[0].timestamp) / 60000);
+        const secondHalfDensity = secondHalf.length / ((secondHalf[secondHalf.length - 1].timestamp - secondHalf[0].timestamp) / 60000);
+        
+        const trendRatio = secondHalfDensity / firstHalfDensity;
+        
+        if (trendRatio > 1.2) return 'increasing';
+        if (trendRatio < 0.8) return 'decreasing';
+        return 'stable';
+      }
+      
+      // Display activity analytics overlay
+      function showActivityAnalytics() {
+        const existing = document.getElementById('analytics-overlay');
+        if (existing) existing.remove();
+        
+        const report = generateActivityReport();
+        
+        const overlay = document.createElement('div');
+        overlay.id = 'analytics-overlay';
+        overlay.style.cssText = `
+          position: absolute;
+          top: 50px;
+          right: 10px;
+          background: rgba(0,0,0,0.9);
+          color: #4CAF50;
+          padding: 15px;
+          border-radius: 10px;
+          font-family: monospace;
+          font-size: 11px;
+          z-index: 250;
+          min-width: 300px;
+          max-width: 400px;
+          max-height: 70vh;
+          overflow-y: auto;
+          border: 2px solid #4CAF50;
+        `;
+        
+        let content = `
+          <div style="color: #81C784; font-weight: bold; margin-bottom: 10px;">📊 ACTIVITY ANALYTICS DASHBOARD</div>
+          <div><strong>Total Bots:</strong> ${report.totalBots}</div>
+          <div><strong>Total Messages:</strong> ${report.totalMessages}</div>
+          <div><strong>Generated:</strong> ${new Date(report.timestamp).toLocaleTimeString()}</div>
+          <hr style="border-color: #4CAF50; margin: 10px 0;">
+          
+          <div style="color: #81C784; font-weight: bold;">🧭 CARDINAL ANALYSIS</div>
+        `;
+        
+        Object.keys(report.cardinalDistribution).forEach(cardinal => {
+          const data = report.cardinalDistribution[cardinal];
+          content += `
+            <div style="margin-left: 10px;">
+              <strong>${cardinal.toUpperCase()}:</strong> ${data.totalMessages} msgs, ${data.botCount} bots, avg: ${data.avgActivity.toFixed(1)}
+            </div>
+          `;
+        });
+        
+        content += `
+          <hr style="border-color: #4CAF50; margin: 10px 0;">
+          <div style="color: #81C784; font-weight: bold;">🏆 TOP COMMUNICATORS</div>
+        `;
+        
+        report.topCommunicators.forEach((bot, index) => {
+          content += `
+            <div style="margin-left: 10px;">
+              ${index + 1}. Bot ${bot.botId.substring(0, 8)}: ${bot.messageCount} msgs, ${bot.uniqueTargets} targets (${bot.cardinal})
+            </div>
+          `;
+        });
+        
+        content += `
+          <hr style="border-color: #4CAF50; margin: 10px 0;">
+          <div style="color: #81C784; font-weight: bold;">📈 RECENT TRENDS</div>
+        `;
+        
+        Object.keys(report.activityTrends).slice(0, 5).forEach(botId => {
+          const trend = report.activityTrends[botId];
+          const trendIcon = trend.trend === 'increasing' ? '📈' : trend.trend === 'decreasing' ? '📉' : '➡️';
+          content += `
+            <div style="margin-left: 10px;">
+              ${trendIcon} Bot ${botId.substring(0, 8)}: ${trend.messagesLastHour} msgs/hr
+            </div>
+          `;
+        });
+        
+        content += `
+          <hr style="border-color: #4CAF50; margin: 10px 0;">
+          <div style="font-size: 9px; opacity: 0.7;">Click anywhere to close</div>
+        `;
+        
+        overlay.innerHTML = content;
+        overlay.onclick = () => overlay.remove();
+        
+        document.body.appendChild(overlay);
+        
+        addMessage('📊 Activity analytics dashboard displayed', 'sys');
+      }
+      
+      // Auto-update analytics when messages are received
+      function updateAnalyticsOnMessage(botId, messageContent, targetBotId = null) {
+        recordBotActivity(botId, messageContent, targetBotId);
+        
+        // Auto-refresh stats if visible
+        if (window.realTimeStatsVisible && document.getElementById('stats-overlay')) {
+          updateStatsOverlay();
+        }
+      }
+      
+      // Advanced 3D Visual Effects System
+      
+      // Connection line effects for active bot communications
+      function createActiveConnectionEffect(fromBot, toBot) {
+        if (!fromBot.mesh || !toBot.mesh) return;
+        
+        const fromPos = fromBot.mesh.position;
+        const toPos = toBot.mesh.position;
+        
+        // Create enhanced connection line with animated flow
+        const lineGeometry = new THREE.BufferGeometry().setFromPoints([fromPos, toPos]);
+        const lineMaterial = new THREE.LineBasicMaterial({
+          color: getBotColor(fromBot.cardinal),
+          transparent: true,
+          opacity: 0.8,
+          linewidth: 3
+        });
+        
+        const connectionLine = new THREE.Line(lineGeometry, lineMaterial);
+        window.scene.add(connectionLine);
+        
+        // Create flowing particles along the connection
+        const particleCount = 5;
+        const connectionParticles = [];
+        
+        for (let i = 0; i < particleCount; i++) {
+          const particleGeometry = new THREE.SphereGeometry(0.05, 8, 8);
+          const particleMaterial = new THREE.MeshBasicMaterial({
+            color: getBotColor(fromBot.cardinal),
+            transparent: true,
+            opacity: 0.9
+          });
+          
+          const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+          window.scene.add(particle);
+          connectionParticles.push(particle);
+        }
+        
+        // Animate flowing particles
+        let connectionProgress = 0;
+        const connectionSpeed = 0.02;
+        
+        function animateConnectionFlow() {
+          connectionParticles.forEach((particle, index) => {
+            const particleProgress = (connectionProgress + (index * 0.2)) % 1;
+            const currentPos = fromPos.clone().lerp(toPos, particleProgress);
+            
+            // Add slight sine wave motion
+            const waveOffset = new THREE.Vector3(
+              Math.sin(particleProgress * Math.PI * 4) * 0.1,
+              Math.cos(particleProgress * Math.PI * 3) * 0.08,
+              Math.sin(particleProgress * Math.PI * 5) * 0.06
+            );
+            
+            particle.position.copy(currentPos.add(waveOffset));
+            particle.material.opacity = Math.sin(particleProgress * Math.PI) * 0.9;
+          });
+          
+          connectionProgress += connectionSpeed;
+          
+          if (connectionProgress < 2) { // Run for 2 cycles
+            requestAnimationFrame(animateConnectionFlow);
+          } else {
+            // Clean up
+            window.scene.remove(connectionLine);
+            connectionParticles.forEach(particle => window.scene.remove(particle));
+          }
+        }
+        
+        animateConnectionFlow();
+      }
+      
+      // Enhanced ambient lighting effects
+      function createAmbientEffects() {
+        // Dynamic background color based on activity
+        const totalActivity = Array.from(window.messageCounters.values()).reduce((sum, count) => sum + count, 0);
+        const activityIntensity = Math.min(totalActivity / 50, 1); // Normalize to 0-1
+        
+        // Update scene background with subtle activity-based coloring
+        const baseColor = new THREE.Color(0x000011);
+        const activityColor = new THREE.Color(0x001122);
+        const currentColor = baseColor.clone().lerp(activityColor, activityIntensity);
+        window.scene.background = currentColor;
+        
+        // Add dynamic point lights at cardinal positions
+        if (!window.cardinalLights) {
+          window.cardinalLights = new Map();
+          
+          const cardinals = ['north', 'south', 'east', 'west'];
+          cardinals.forEach(cardinal => {
+            const cardinalPos = getCardinalPosition(cardinal);
+            
+            const pointLight = new THREE.PointLight(getBotColor(cardinal), 0.3, 15);
+            pointLight.position.copy(cardinalPos.clone().add(new THREE.Vector3(0, 2, 0)));
+            window.scene.add(pointLight);
+            
+            window.cardinalLights.set(cardinal, pointLight);
+          });
+        }
+        
+        // Update cardinal light intensity based on activity
+        window.cardinalLights.forEach((light, cardinal) => {
+          const cardinalBots = Array.from(window.bots.values()).filter(bot => bot.cardinal === cardinal);
+          const cardinalActivity = cardinalBots.reduce((sum, bot) => {
+            return sum + (window.messageCounters.get(bot.id) || 0);
+          }, 0);
+          
+          const intensity = Math.min(0.2 + (cardinalActivity / 10), 1.0);
+          light.intensity = intensity;
+          
+          // Add subtle pulsing effect
+          const pulseIntensity = Math.sin(Date.now() * 0.003) * 0.1 + 0.9;
+          light.intensity *= pulseIntensity;
+        });
+      }
+      
+      // Create message burst effect with enhanced visuals
+      function createMessageBurstEffect(position, botId, messageContent) {
+        const bot = window.bots.get(botId);
+        if (!bot) return;
+        
+        const burstColor = getBotColor(bot.cardinal);
+        const messageIntensity = Math.min(messageContent.length / 20, 2); // Base intensity on message length
+        
+        // Create main burst sphere
+        const burstGeometry = new THREE.SphereGeometry(0.15, 16, 16);
+        const burstMaterial = new THREE.MeshStandardMaterial({
+          color: burstColor,
+          emissive: new THREE.Color(burstColor).multiplyScalar(0.5),
+          transparent: true,
+          opacity: 0.9
+        });
+        
+        const burstSphere = new THREE.Mesh(burstGeometry, burstMaterial);
+        burstSphere.position.copy(position);
+        window.scene.add(burstSphere);
+        
+        // Create radiating ring effect
+        const ringGeometry = new THREE.RingGeometry(0.2, 0.4, 16);
+        const ringMaterial = new THREE.MeshBasicMaterial({
+          color: burstColor,
+          transparent: true,
+          opacity: 0.5,
+          side: THREE.DoubleSide
+        });
+        
+        const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+        ring.position.copy(position);
+        ring.lookAt(window.camera.position);
+        window.scene.add(ring);
+        
+        // Create spiral particles
+        const spiralCount = Math.floor(8 + messageIntensity * 4);
+        const spiralParticles = [];
+        
+        for (let i = 0; i < spiralCount; i++) {
+          const spiralGeometry = new THREE.SphereGeometry(0.04, 8, 8);
+          const spiralMaterial = new THREE.MeshBasicMaterial({
+            color: burstColor,
+            transparent: true,
+            opacity: 0.8
+          });
+          
+          const spiralParticle = new THREE.Mesh(spiralGeometry, spiralMaterial);
+          spiralParticle.position.copy(position);
+          window.scene.add(spiralParticle);
+          spiralParticles.push(spiralParticle);
+        }
+        
+        // Animate burst effect
+        let burstProgress = 0;
+        const burstDuration = 60; // frames
+        
+        function animateBurst() {
+          if (burstProgress >= burstDuration) {
+            // Clean up
+            window.scene.remove(burstSphere);
+            window.scene.remove(ring);
+            spiralParticles.forEach(particle => window.scene.remove(particle));
+            return;
+          }
+          
+          const progress = burstProgress / burstDuration;
+          
+          // Animate main burst
+          const scale = 1 + progress * messageIntensity;
+          burstSphere.scale.setScalar(scale);
+          burstMaterial.opacity = 0.9 * (1 - progress);
+          
+          // Animate ring
+          ring.scale.setScalar(1 + progress * 3);
+          ringMaterial.opacity = 0.5 * (1 - progress);
+          
+          // Animate spiral particles
+          spiralParticles.forEach((particle, index) => {
+            const angle = (index / spiralCount) * Math.PI * 2 + progress * Math.PI * 4;
+            const radius = progress * 2;
+            const height = Math.sin(progress * Math.PI * 2) * 0.5;
+            
+            const spiralPos = new THREE.Vector3(
+              position.x + Math.cos(angle) * radius,
+              position.y + height,
+              position.z + Math.sin(angle) * radius
+            );
+            
+            particle.position.copy(spiralPos);
+            particle.material.opacity = 0.8 * (1 - progress);
+            particle.scale.setScalar(1 - progress * 0.5);
+          });
+          
+          burstProgress++;
+          requestAnimationFrame(animateBurst);
+        }
+        
+        animateBurst();
+      }
+      
+      // Create floating text effect for messages
+      function createFloatingTextEffect(position, text, color = 0x4CAF50) {
+        // Create text texture
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = 256;
+        canvas.height = 64;
+        
+        context.fillStyle = 'rgba(0, 0, 0, 0)';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        
+        context.font = '16px monospace';
+        context.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
+        context.textAlign = 'center';
+        context.fillText(text.substring(0, 20), canvas.width / 2, canvas.height / 2);
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        
+        // Create text mesh
+        const textGeometry = new THREE.PlaneGeometry(2, 0.5);
+        const textMaterial = new THREE.MeshBasicMaterial({
+          map: texture,
+          transparent: true,
+          opacity: 1.0
+        });
+        
+        const textMesh = new THREE.Mesh(textGeometry, textMaterial);
+        textMesh.position.copy(position.clone().add(new THREE.Vector3(0, 1, 0)));
+        textMesh.lookAt(window.camera.position);
+        window.scene.add(textMesh);
+        
+        // Animate floating text
+        let textProgress = 0;
+        const textDuration = 120; // frames
+        
+        function animateFloatingText() {
+          if (textProgress >= textDuration) {
+            window.scene.remove(textMesh);
+            return;
+          }
+          
+          const progress = textProgress / textDuration;
+          
+          // Float upward
+          textMesh.position.y += 0.02;
+          
+          // Fade out
+          textMaterial.opacity = 1.0 - progress;
+          
+          // Always face camera
+          textMesh.lookAt(window.camera.position);
+          
+          textProgress++;
+          requestAnimationFrame(animateFloatingText);
+        }
+        
+        animateFloatingText();
+      }
+      
+      // Update visual effects continuously
+      function updateVisualEffects() {
+        if (typeof THREE !== 'undefined' && window.scene) {
+          createAmbientEffects();
+          
+          // Add subtle hub pulsing
+          if (window.hub) {
+            const pulseScale = 1 + Math.sin(Date.now() * 0.005) * 0.1;
+            window.hub.scale.setScalar(pulseScale);
+          }
+          
+          // Update bot glow effects based on activity
+          window.bots.forEach((bot, botId) => {
+            if (bot.mesh) {
+              const messageCount = window.messageCounters.get(botId) || 0;
+              const activityLevel = Math.min(messageCount / 10, 1);
+              
+              // Update emissive intensity
+              if (bot.mesh.material.emissive) {
+                const baseColor = new THREE.Color(getBotColor(bot.cardinal));
+                bot.mesh.material.emissive = baseColor.multiplyScalar(activityLevel * 0.3);
+              }
+            }
+          });
+        }
+      }
+      
+      // Start continuous visual effects update
+      if (!window.visualEffectsRunning) {
+        window.visualEffectsRunning = true;
+        
+        function visualEffectsLoop() {
+          updateVisualEffects();
+          requestAnimationFrame(visualEffectsLoop);
+        }
+        
+        visualEffectsLoop();
+      }
+      
+      // Performance Optimization System
+      
+      // Object pooling for particles to reduce garbage collection
+      window.particlePool = {
+        spheres: [],
+        materials: new Map(),
+        geometries: new Map()
+      };
+      
+      // Get pooled particle
+      function getPooledParticle(type = 'sphere', color = 0x4CAF50, size = 0.1) {
+        const key = `${type}-${color}-${size}`;
+        
+        // Try to get from pool
+        if (window.particlePool.spheres.length > 0) {
+          const particle = window.particlePool.spheres.pop();
+          particle.material.color.setHex(color);
+          particle.scale.setScalar(size / 0.1);
+          particle.visible = true;
+          return particle;
+        }
+        
+        // Create new if pool is empty
+        let geometry = window.particlePool.geometries.get(`sphere-${size}`);
+        if (!geometry) {
+          geometry = new THREE.SphereGeometry(size, 8, 8);
+          window.particlePool.geometries.set(`sphere-${size}`, geometry);
+        }
+        
+        let material = window.particlePool.materials.get(color);
+        if (!material) {
+          material = new THREE.MeshBasicMaterial({
+            color: color,
+            transparent: true,
+            opacity: 0.9
+          });
+          window.particlePool.materials.set(color, material);
+        }
+        
+        return new THREE.Mesh(geometry, material.clone());
+      }
+      
+      // Return particle to pool
+      function returnToPool(particle) {
+        particle.visible = false;
+        particle.position.set(0, 0, 0);
+        particle.rotation.set(0, 0, 0);
+        particle.scale.set(1, 1, 1);
+        particle.material.opacity = 0.9;
+        
+        if (window.particlePool.spheres.length < 50) {
+          window.particlePool.spheres.push(particle);
+        } else {
+          // Remove from scene if pool is full
+          if (particle.parent) particle.parent.remove(particle);
+        }
+      }
+      
+      // Frustum culling for better performance
+      function setupFrustumCulling() {
+        if (!window.frustum) {
+          window.frustum = new THREE.Frustum();
+          window.cameraMatrix = new THREE.Matrix4();
+        }
+        
+        // Update frustum
+        window.cameraMatrix.multiplyMatrices(window.camera.projectionMatrix, window.camera.matrixWorldInverse);
+        window.frustum.setFromProjectionMatrix(window.cameraMatrix);
+        
+        // Cull objects outside frustum
+        window.scene.children.forEach(object => {
+          if (object.userData.cullable) {
+            object.visible = window.frustum.intersectsObject(object);
+          }
+        });
+      }
+      
+      // Level of Detail (LOD) system for bots
+      function updateLOD() {
+        const cameraPosition = window.camera.position;
+        
+        window.bots.forEach((bot, botId) => {
+          if (!bot.mesh) return;
+          
+          const distance = bot.mesh.position.distanceTo(cameraPosition);
+          
+          if (distance > 20) {
+            // Far: Simple representation
+            bot.mesh.material.wireframe = true;
+            if (bot.line) bot.line.visible = false;
+          } else if (distance > 10) {
+            // Medium: Normal representation
+            bot.mesh.material.wireframe = false;
+            if (bot.line) bot.line.visible = true;
+            if (bot.line) bot.line.material.opacity = 0.3;
+          } else {
+            // Near: Full detail
+            bot.mesh.material.wireframe = false;
+            if (bot.line) bot.line.visible = true;
+            if (bot.line) bot.line.material.opacity = 0.6;
+          }
+        });
+      }
+      
+      // Performance monitoring
+      window.performanceStats = {
+        frameCount: 0,
+        startTime: Date.now(),
+        fps: 60,
+        memoryUsage: 0,
+        particleCount: 0
+      };
+      
+      function updatePerformanceStats() {
+        window.performanceStats.frameCount++;
+        
+        const currentTime = Date.now();
+        const elapsed = currentTime - window.performanceStats.startTime;
+        
+        if (elapsed >= 1000) {
+          window.performanceStats.fps = Math.round(window.performanceStats.frameCount * 1000 / elapsed);
+          window.performanceStats.frameCount = 0;
+          window.performanceStats.startTime = currentTime;
+          
+          // Update particle count
+          window.performanceStats.particleCount = window.particleSystem.length;
+          
+          // Memory usage (if available)
+          if (performance.memory) {
+            window.performanceStats.memoryUsage = Math.round(performance.memory.usedJSHeapSize / 1024 / 1024);
+          }
+          
+          // Auto-adjust quality based on performance
+          if (window.performanceStats.fps < 30) {
+            // Reduce quality
+            reducedQualityMode(true);
+          } else if (window.performanceStats.fps > 50) {
+            // Restore quality
+            reducedQualityMode(false);
+          }
+        }
+      }
+      
+      // Reduced quality mode for better performance
+      let qualityReduced = false;
+      function reducedQualityMode(enable) {
+        if (enable === qualityReduced) return;
+        
+        qualityReduced = enable;
+        
+        if (enable) {
+          // Reduce visual effects
+          window.messageTrailsVisible = false;
+          
+          // Simplify bot meshes
+          window.bots.forEach((bot, botId) => {
+            if (bot.mesh) {
+              bot.mesh.material.wireframe = true;
+              if (bot.line) bot.line.visible = false;
+            }
+          });
+          
+          // Reduce cardinal lights
+          if (window.cardinalLights) {
+            window.cardinalLights.forEach(light => {
+              light.intensity *= 0.5;
+            });
+          }
+          
+          addMessage('⚠️ Performance mode enabled - visual effects reduced', 'sys');
+        } else {
+          // Restore full quality
+          window.messageTrailsVisible = true;
+          
+          window.bots.forEach((bot, botId) => {
+            if (bot.mesh) {
+              bot.mesh.material.wireframe = false;
+              if (bot.line) bot.line.visible = true;
+            }
+          });
+          
+          if (window.cardinalLights) {
+            window.cardinalLights.forEach(light => {
+              light.intensity *= 2;
+            });
+          }
+          
+          addMessage('✨ Full quality mode restored', 'sys');
+        }
+      }
+      
+      // Enhanced render loop with performance optimizations
+      function optimizedRenderLoop() {
+        // Update performance stats
+        updatePerformanceStats();
+        
+        // Update LOD every few frames
+        if (window.performanceStats.frameCount % 5 === 0) {
+          updateLOD();
+        }
+        
+        // Update frustum culling every few frames
+        if (window.performanceStats.frameCount % 3 === 0) {
+          setupFrustumCulling();
+        }
+        
+        // Clean up old particles
+        if (window.particleSystem.length > 100) {
+          const particlesToRemove = window.particleSystem.splice(0, window.particleSystem.length - 100);
+          particlesToRemove.forEach(particle => {
+            if (particle.parent) particle.parent.remove(particle);
+          });
+        }
+        
+        requestAnimationFrame(optimizedRenderLoop);
+      }
+      
+      // Start optimized render loop
+      if (!window.renderLoopStarted) {
+        window.renderLoopStarted = true;
+        optimizedRenderLoop();
+      }
+      
+      // Toggle performance mode function for UI
+      function toggleQualityMode() {
+        reducedQualityMode(!qualityReduced);
+        
+        const btn = document.querySelector('button[onclick="toggleQualityMode()"]');
+        if (qualityReduced) {
+          btn.classList.add('active');
+          btn.innerHTML = '🔋 Economy';
+        } else {
+          btn.classList.remove('active');
+          btn.innerHTML = '⚡ Performance';
+        }
+      }
 
       function addMessage(message, channel = 'app') {
         const messageLog = document.getElementById('message-log');
@@ -2047,6 +3168,7 @@
           window.socket.emit('message', { botId: randomBotId, message, channel });
         } else {
           addMessage(`${randomBotId}: ${message}`, channel);
+          updateAnalyticsOnMessage(randomBotId, message);
           if (typeof THREE !== 'undefined') {
             animateMessageParticle(randomBotId);
           }
