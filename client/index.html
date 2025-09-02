@@ -1329,12 +1329,21 @@
         window.bots.forEach((bot, botId) => {
           const cardinal = bot.cardinal || assignCardinal(botId);
           bot.cardinal = cardinal;
+          
+          // Ensure cardinal group exists
+          if (!cardinalGroups[cardinal]) {
+            cardinalGroups[cardinal] = [];
+          }
+          
           cardinalGroups[cardinal].push({ botId, bot });
         });
         
         // Render each cardinal group in spiral formation
         Object.keys(cardinalGroups).forEach(cardinal => {
           const bots = cardinalGroups[cardinal];
+          
+          // Skip if no bots in this cardinal
+          if (!bots || bots.length === 0) return;
           
           // Sort by message activity (most active closest to cardinal point)
           bots.sort((a, b) => {
