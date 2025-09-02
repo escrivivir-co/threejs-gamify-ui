@@ -299,7 +299,7 @@
         </div>
 
         <div class="interaction-hint">
-          🖱️ Click and drag to orbit • Click bots for details • Scroll to zoom
+          🖱️ Left: Rotate • Right: Pan • Ctrl+Left: Precision • Scroll: Zoom • Click bots: Details • Double-click: Focus
         </div>
 
         <div class="immersive-controls">
@@ -351,8 +351,26 @@
         <span class="bot-detail-label">Messages Sent:</span>
         <span id="bot-info-messages">0</span>
       </div>
+      <div class="bot-detail">
+        <span class="bot-detail-label">Room:</span>
+        <span id="bot-info-room">-</span>
+      </div>
       <div style="margin-top: 16px; text-align: center;">
         <button class="control-button start-btn" onclick="directBotControl()" id="bot-info-control">Interact</button>
+        <button class="control-button" onclick="selectBotAsSource()" id="select-source-btn">Select as Source</button>
+      </div>
+      <div class="message-sender" style="margin-top: 16px;">
+        <h4 style="color: #4CAF50; margin-bottom: 8px;">Send Spiral Message</h4>
+        <div class="bot-selector" style="margin-bottom: 8px;">
+          <label style="color: #fff; font-size: 12px;">Target Bot:</label>
+          <select id="target-bot-select" style="width: 100%; padding: 4px; margin-top: 4px;">
+            <option value="">Select target bot...</option>
+          </select>
+        </div>
+        <div class="message-input">
+          <input type="text" id="message-input" placeholder="Enter message..." style="width: 100%; padding: 6px; margin: 4px 0; border: 1px solid #4CAF50; background: rgba(0,0,0,0.8); color: #fff;">
+          <button class="control-button" onclick="sendSpiralMessage()" id="send-message-btn" style="width: 100%; margin-top: 4px;">Send via Spiral</button>
+        </div>
       </div>
     </div>
 
@@ -413,27 +431,88 @@
             };
             
             // Mouse event handlers
+            let isMouseDown = false;
+            let mouseButton = -1;
+            
             function onMouseDown(event) {
-              if (!scope.enableRotate) return;
-              rotateStart.set(event.clientX, event.clientY);
-              scope.domElement.addEventListener('mousemove', onMouseMove);
-              scope.domElement.addEventListener('mouseup', onMouseUp);
+              event.preventDefault();
+              isMouseDown = true;
+              mouseButton = event.button;
+              
+              if (event.button === 0) { // Left click for rotation
+                if (!scope.enableRotate) return;
+                rotateStart.set(event.clientX, event.clientY);
+                scope.domElement.addEventListener('mousemove', onMouseMove);
+                scope.domElement.addEventListener('mouseup', onMouseUp);
+              } else if (event.button === 2) { // Right click for panning
+                if (!scope.enablePan) return;
+                rotateStart.set(event.clientX, event.clientY);
+                scope.domElement.addEventListener('mousemove', onMouseMovePanel);
+                scope.domElement.addEventListener('mouseup', onMouseUp);
+              }
             }
             
             function onMouseMove(event) {
+              if (!isMouseDown || mouseButton !== 0) return;
               rotateEnd.set(event.clientX, event.clientY);
               rotateDelta.subVectors(rotateEnd, rotateStart).multiplyScalar(0.01);
-              sphericalDelta.theta -= rotateDelta.x;
-              sphericalDelta.phi += rotateDelta.y;
+              
+              // Enhanced rotation with Ctrl modifier for precision
+              const multiplier = event.ctrlKey ? 0.3 : 1.0;
+              sphericalDelta.theta -= rotateDelta.x * multiplier;
+              sphericalDelta.phi += rotateDelta.y * multiplier;
               rotateStart.copy(rotateEnd);
             }
             
-            function onMouseUp() {
+            function onMouseMovePanel(event) {
+              if (!isMouseDown || mouseButton !== 2) return;
+              rotateEnd.set(event.clientX, event.clientY);
+              rotateDelta.subVectors(rotateEnd, rotateStart).multiplyScalar(0.05);
+              
+              // Pan camera target
+              const panOffset = new THREE.Vector3();
+              panOffset.copy(scope.camera.position).sub(scope.target);
+              const targetDistance = panOffset.length();
+              
+              const panVector = new THREE.Vector3(-rotateDelta.x, rotateDelta.y, 0);
+              panVector.multiplyScalar(targetDistance * 0.001);
+              scope.target.add(panVector);
+              rotateStart.copy(rotateEnd);
+            }
+            
+            function onMouseUp(event) {
+              isMouseDown = false;
+              mouseButton = -1;
               scope.domElement.removeEventListener('mousemove', onMouseMove);
+              scope.domElement.removeEventListener('mousemove', onMouseMovePanel);
               scope.domElement.removeEventListener('mouseup', onMouseUp);
             }
             
+            function onWheel(event) {
+              event.preventDefault();
+              if (!scope.enableZoom) return;
+              
+              const scaleFactor = event.deltaY > 0 ? 1.1 : 0.9;
+              const position = scope.camera.position;
+              const target = scope.target;
+              const distance = position.distanceTo(target);
+              
+              const newDistance = distance * scaleFactor;
+              if (newDistance > scope.maxDistance || newDistance < scope.minDistance) {
+                return;
+              }
+              
+              const direction = position.clone().sub(target).normalize();
+              position.copy(target).add(direction.multiplyScalar(newDistance));
+            }
+            
+            function onContextMenu(event) {
+              event.preventDefault();
+            }
+            
             this.domElement.addEventListener('mousedown', onMouseDown);
+            this.domElement.addEventListener('wheel', onWheel, { passive: false });
+            this.domElement.addEventListener('contextmenu', onContextMenu);
           };
         }
       });
@@ -534,10 +613,18 @@
         window.mouse = new THREE.Vector2();
         window.selectedBot = null;
         window.hoveredBot = null;
+        window.sourceBot = null;
+        window.targetBot = null;
+        window.currentBots = new Map();
+        window.messageCounters = new Map();
+        window.botPositions = new Map();
+        window.messageTrajectories = [];
+        window.particleSystem = [];
 
-        // Add mouse event listeners
+        // Add mouse event listeners with enhanced functionality
         canvas.addEventListener('mousemove', onMouseMove);
         canvas.addEventListener('click', onMouseClick);
+        canvas.addEventListener('dblclick', onDoubleClick);
         canvas.addEventListener('mouseout', onMouseOut);
 
         // Lighting
@@ -749,6 +836,33 @@
         const hoverEffect = document.getElementById('bot-hover-effect');
         hoverEffect.style.display = 'none';
         event.target.style.cursor = 'default';
+      }
+      
+      // Double-click handler for enhanced focus functionality
+      function onDoubleClick(event) {
+        if (!window.raycaster || !window.camera) return;
+        
+        const rect = canvas.getBoundingClientRect();
+        window.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        window.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        
+        window.raycaster.setFromCamera(window.mouse, window.camera);
+        
+        // Check for bot intersections
+        const botMeshes = Array.from(window.bots.values()).map(bot => bot.mesh).filter(mesh => mesh);
+        const intersects = window.raycaster.intersectObjects(botMeshes);
+        
+        if (intersects.length > 0) {
+          const clickedBot = intersects[0].object;
+          const botId = clickedBot.userData.botId;
+          const position = clickedBot.position;
+          
+          // Smooth camera focus animation
+          focusOnPosition(position, botId);
+        } else {
+          // Double-click on empty space focuses on center hub
+          focusHub();
+        }
       }
 
       function createClickEffect(position) {
@@ -979,10 +1093,14 @@
         document.getElementById('bot-info-position').textContent = `(${bot.position.x}, ${bot.position.y}, ${bot.position.z})`;
         document.getElementById('bot-info-cardinal').textContent = bot.cardinal;
         document.getElementById('bot-info-messages').textContent = window.messageCounters.get(botId) || 0;
+        document.getElementById('bot-info-room').textContent = bot.room || 'Not assigned';
         
         const controlBtn = document.getElementById('bot-info-control');
         controlBtn.textContent = bot.status === 'active' ? 'Stop Bot' : 'Start Bot';
         controlBtn.className = `control-button ${bot.status === 'active' ? 'stop-btn' : 'start-btn'}`;
+        
+        // Update bot selector for messaging
+        updateBotSelector();
         
         document.getElementById('bot-info-panel').style.display = 'block';
       }
@@ -1045,6 +1163,238 @@
           document.exitFullscreen();
           addMessage('Exited fullscreen mode', 'ui');
         }
+      }
+      
+      // Update bot selector dropdown for messaging
+      function updateBotSelector() {
+        const select = document.getElementById('target-bot-select');
+        if (!select) return;
+        
+        select.innerHTML = '<option value="">Select target bot...</option>';
+        
+        window.bots.forEach((bot, botId) => {
+          if (botId !== window.selectedBot && bot.status === 'active') {
+            const option = document.createElement('option');
+            option.value = botId;
+            option.textContent = `${botId} (${bot.cardinal})`;
+            select.appendChild(option);
+          }
+        });
+      }
+      
+      // Select bot as message source
+      function selectBotAsSource() {
+        if (window.selectedBot) {
+          window.sourceBot = window.selectedBot;
+          addMessage(`Bot ${window.selectedBot} selected as message source`, 'ui');
+          
+          // Update UI to show selection
+          const sourceBtn = document.getElementById('select-source-btn');
+          if (sourceBtn) {
+            sourceBtn.textContent = 'Source Selected ✓';
+            sourceBtn.style.background = '#4CAF50';
+            setTimeout(() => {
+              sourceBtn.textContent = 'Select as Source';
+              sourceBtn.style.background = '';
+            }, 2000);
+          }
+        }
+      }
+      
+      // Send message with spiral trajectory animation
+      function sendSpiralMessage() {
+        const sourceBot = window.sourceBot || window.selectedBot;
+        const targetBotId = document.getElementById('target-bot-select')?.value;
+        const messageContent = document.getElementById('message-input')?.value;
+        
+        if (!sourceBot || !targetBotId || !messageContent?.trim()) {
+          addMessage('Please select source bot, target bot, and enter a message', 'sys');
+          return;
+        }
+        
+        if (!window.socket || !window.socket.connected) {
+          addMessage('Socket not connected', 'sys');
+          return;
+        }
+        
+        // Send the message with trajectory instructions
+        const message = {
+          type: 'spiral_message',
+          from: sourceBot,
+          to: targetBotId,
+          content: messageContent.trim(),
+          channel: 'app',
+          trajectory: 'spiral',
+          timestamp: Date.now()
+        };
+        
+        window.socket.emit('bot_message', message);
+        
+        // Create visual spiral trajectory animation
+        createSpiralTrajectory(sourceBot, targetBotId, messageContent.trim());
+        
+        addMessage(`🌀 Spiral message: ${sourceBot} → ${targetBotId}: "${messageContent.trim()}"`, 'app');
+        
+        // Clear input and update counters
+        document.getElementById('message-input').value = '';
+        
+        // Update message counter
+        const currentCount = window.messageCounters.get(sourceBot) || 0;
+        window.messageCounters.set(sourceBot, currentCount + 1);
+        
+        // Update the info panel if showing this bot
+        if (window.selectedBot === sourceBot) {
+          document.getElementById('bot-info-messages').textContent = currentCount + 1;
+        }
+      }
+      
+      // Smooth camera focus with animation for enhanced navigation
+      function focusOnPosition(targetPosition, botId) {
+        if (!window.camera || !window.controls) return;
+        
+        const startPos = window.camera.position.clone();
+        const distance = 8;
+        const direction = new THREE.Vector3(1, 1, 1).normalize();
+        const endPos = targetPosition.clone().add(direction.multiplyScalar(distance));
+        
+        let progress = 0;
+        const animationSpeed = 0.05;
+        
+        function animateCamera() {
+          progress += animationSpeed;
+          
+          if (progress >= 1) {
+            window.camera.position.copy(endPos);
+            window.controls.target.copy(targetPosition);
+            window.camera.lookAt(targetPosition);
+            addMessage(`🎯 Smooth focus on ${botId ? 'bot ' + botId : 'target position'}`, 'ui');
+            return;
+          }
+          
+          // Smooth interpolation
+          window.camera.position.lerpVectors(startPos, endPos, progress);
+          window.controls.target.lerp(targetPosition, progress);
+          window.camera.lookAt(window.controls.target);
+          
+          requestAnimationFrame(animateCamera);
+        }
+        
+        animateCamera();
+      }
+      
+      // Create spiral trajectory animation according to specifications:
+      // Bot → Cardinal Point → Center → Cardinal Point → Target Bot
+      function createSpiralTrajectory(fromBotId, toBotId, messageContent) {
+        const fromBot = window.bots.get(fromBotId);
+        const toBot = window.bots.get(toBotId);
+        
+        if (!fromBot || !toBot || !window.scene) {
+          console.log('Missing bot or scene for trajectory');
+          return;
+        }
+        
+        // Get cardinal positions (spiral endpoints)
+        const fromCardinal = getCardinalPosition(fromBot.cardinal);
+        const toCardinal = getCardinalPosition(toBot.cardinal);
+        const centerPos = new THREE.Vector3(0, 0, 0); // Hub center
+        
+        // Create trajectory points: Bot → Cardinal → Center → Cardinal → Bot
+        const trajectoryPoints = [
+          fromBot.position.clone(),
+          fromCardinal,
+          centerPos,
+          toCardinal,
+          toBot.position.clone()
+        ];
+        
+        // Create animated particle for the message
+        createMessageParticle(trajectoryPoints, messageContent, fromBotId, toBotId);
+        
+        addMessage(`🎯 Trajectory: ${fromBotId} → ${fromBot.cardinal} cardinal → center → ${toBot.cardinal} cardinal → ${toBotId}`, 'app');
+      }
+      
+      // Get cardinal point position for spiral trajectory
+      function getCardinalPosition(cardinal) {
+        const distance = 8; // Distance from center to cardinal points
+        const height = 0;
+        
+        switch(cardinal.toLowerCase()) {
+          case 'north': return new THREE.Vector3(0, height, -distance);
+          case 'south': return new THREE.Vector3(0, height, distance);
+          case 'east': return new THREE.Vector3(distance, height, 0);
+          case 'west': return new THREE.Vector3(-distance, height, 0);
+          default: return new THREE.Vector3(0, height, 0);
+        }
+      }
+      
+      // Create animated message particle following spiral trajectory
+      function createMessageParticle(trajectoryPoints, messageContent, fromId, toId) {
+        // Create particle geometry and material
+        const particleGeometry = new THREE.SphereGeometry(0.2, 8, 8);
+        const particleMaterial = new THREE.MeshBasicMaterial({ 
+          color: 0x00ff88, 
+          transparent: true, 
+          opacity: 0.8 
+        });
+        const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+        
+        // Add glow effect
+        const glowGeometry = new THREE.SphereGeometry(0.4, 8, 8);
+        const glowMaterial = new THREE.MeshBasicMaterial({
+          color: 0x00ff88,
+          transparent: true,
+          opacity: 0.3
+        });
+        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+        particle.add(glow);
+        
+        // Add to scene
+        window.scene.add(particle);
+        
+        // Animation parameters
+        let currentSegment = 0;
+        let segmentProgress = 0;
+        const animationSpeed = 0.02; // Adjust for speed
+        const totalSegments = trajectoryPoints.length - 1;
+        
+        // Animation function
+        function animateParticle() {
+          if (currentSegment >= totalSegments) {
+            // Animation complete
+            window.scene.remove(particle);
+            addMessage(`✅ Message delivered: "${messageContent}" from ${fromId} to ${toId}`, 'app');
+            return;
+          }
+          
+          // Current segment start and end points
+          const startPoint = trajectoryPoints[currentSegment];
+          const endPoint = trajectoryPoints[currentSegment + 1];
+          
+          // Interpolate position along current segment
+          particle.position.lerpVectors(startPoint, endPoint, segmentProgress);
+          
+          // Update progress
+          segmentProgress += animationSpeed;
+          
+          // Move to next segment if current is complete
+          if (segmentProgress >= 1) {
+            segmentProgress = 0;
+            currentSegment++;
+            
+            // Add waypoint effect
+            if (currentSegment < totalSegments) {
+              const waypointNames = ['bot', 'cardinal', 'center', 'cardinal', 'bot'];
+              addMessage(`📍 Message at ${waypointNames[currentSegment]} waypoint`, 'app');
+            }
+          }
+          
+          // Continue animation
+          requestAnimationFrame(animateParticle);
+        }
+        
+        // Start animation
+        addMessage(`🚀 Message particle launched from ${fromId}`, 'app');
+        animateParticle();
       }
 
       function addMessage(message, channel = 'app') {
