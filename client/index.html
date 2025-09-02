@@ -485,25 +485,58 @@
             <button class="nav-btn" onclick="showActivityAnalytics()" title="Show Activity Analytics">📈 Analytics</button>
             <button class="nav-btn" onclick="toggleQualityMode()" title="Toggle Performance Mode">⚡ Performance</button>
           </div>
+          
+          <div class="nav-section">
+            <span class="nav-section-title">Windows</span>
+            <button class="nav-btn" onclick="togglePanelVisibility('bot-management-panel')" title="Toggle Bot Management">🤖 Bots</button>
+            <button class="nav-btn" onclick="togglePanelVisibility('message-streaming-panel')" title="Toggle Message Stream">💬 Messages</button>
+            <button class="nav-btn" onclick="togglePanelVisibility('bot-info-panel')" title="Toggle Bot Details">📊 Details</button>
+          </div>
         </div>
 
         <div class="bot-hover-effect" id="bot-hover-effect"></div>
       </div>
       
-      <div class="ui-panels">
-        <div class="panel">
-          <h3>🤖 Bot Management</h3>
+      <!-- Movable Bot Management Panel -->
+      <div id="bot-management-panel" class="draggable-panel" style="position: fixed; top: 20px; right: 20px; background: rgba(0, 20, 40, 0.95); border: 1px solid #4CAF50; border-radius: 8px; min-width: 280px; max-width: 400px; backdrop-filter: blur(10px); color: #E8F5E8; font-family: 'Courier New', monospace; font-size: 12px; z-index: 1000; box-shadow: 0 4px 20px rgba(76, 175, 80, 0.3); resize: both; overflow: hidden;">
+        <div class="window-header">
+          <span>🤖 Bot Management</span>
+          <div class="window-controls">
+            <button class="window-btn minimize-btn" onclick="toggleWindow('bot-management-panel')" title="Minimize">−</button>
+            <button class="window-btn close-btn" onclick="hidePanel('bot-management-panel')" title="Close">×</button>
+          </div>
+        </div>
+        <div class="window-content" style="padding: 15px; max-height: 300px; overflow-y: auto;">
           <div id="bot-list">
             <div style="text-align: center; opacity: 0.6; padding: 20px;">
               Connecting to bots...
             </div>
           </div>
         </div>
-        
-        <div class="panel">
-          <h3>💬 Message Streaming</h3>
-          <div class="message-log" id="message-log">
+      </div>
+      
+      <!-- Movable Message Streaming Panel -->
+      <div id="message-streaming-panel" class="draggable-panel" style="position: fixed; bottom: 20px; left: 20px; background: rgba(40, 20, 0, 0.95); border: 1px solid #FF9800; border-radius: 8px; backdrop-filter: blur(10px); color: #FFF3E0; width: 400px; height: 250px; z-index: 999; box-shadow: 0 4px 20px rgba(255, 152, 0, 0.3); resize: both; overflow: hidden;">
+        <div class="window-header">
+          <span>💬 Message Streaming</span>
+          <div class="window-controls">
+            <button class="window-btn minimize-btn" onclick="toggleWindow('message-streaming-panel')" title="Minimize">−</button>
+            <button class="window-btn close-btn" onclick="hidePanel('message-streaming-panel')" title="Close">×</button>
+          </div>
+        </div>
+        <div class="window-content" style="padding: 15px; height: calc(100% - 50px); display: flex; flex-direction: column;">
+          <div class="message-log" id="message-log" style="flex: 1; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 4px; margin-bottom: 10px; font-family: monospace; font-size: 11px;">
             <div class="message-item message-sys">[System] Initializing...</div>
+          </div>
+          <div class="message-filters" style="display: flex; gap: 5px; margin-bottom: 10px;">
+            <button class="filter-btn active" onclick="filterMessages('all')" style="padding: 4px 8px; border: 1px solid #FF9800; background: rgba(255,152,0,0.2); color: #FFF3E0; border-radius: 3px; cursor: pointer; font-size: 10px;">All</button>
+            <button class="filter-btn" onclick="filterMessages('sys')" style="padding: 4px 8px; border: 1px solid #FF9800; background: transparent; color: #FFF3E0; border-radius: 3px; cursor: pointer; font-size: 10px;">Sys</button>
+            <button class="filter-btn" onclick="filterMessages('app')" style="padding: 4px 8px; border: 1px solid #FF9800; background: transparent; color: #FFF3E0; border-radius: 3px; cursor: pointer; font-size: 10px;">App</button>
+            <button class="filter-btn" onclick="filterMessages('ui')" style="padding: 4px 8px; border: 1px solid #FF9800; background: transparent; color: #FFF3E0; border-radius: 3px; cursor: pointer; font-size: 10px;">UI</button>
+          </div>
+          <div class="quick-actions" style="display: flex; gap: 5px;">
+            <button onclick="clearMessageLog()" style="flex: 1; padding: 4px 8px; border: 1px solid #FF9800; background: rgba(255,152,0,0.2); color: #FFF3E0; border-radius: 3px; cursor: pointer; font-size: 10px;">Clear</button>
+            <button onclick="exportMessages()" style="flex: 1; padding: 4px 8px; border: 1px solid #FF9800; background: rgba(255,152,0,0.2); color: #FFF3E0; border-radius: 3px; cursor: pointer; font-size: 10px;">Export</button>
           </div>
         </div>
       </div>
@@ -1632,8 +1665,15 @@
       }
 
       function closeBotInfo() {
+        saveWindowState('bot-info-panel');
         document.getElementById('bot-info-panel').style.display = 'none';
         window.selectedBot = null;
+        
+        // Update navigation button state
+        const navBtn = document.querySelector('[onclick="togglePanelVisibility(\'bot-info-panel\')"]');
+        if (navBtn) {
+          navBtn.classList.remove('active');
+        }
       }
 
       function directBotControl() {
@@ -3368,6 +3408,185 @@
         document.addEventListener('DOMContentLoaded', initializeDraggableWindows);
       } else {
         initializeDraggableWindows();
+      }
+      
+      // Message filtering functionality
+      window.currentMessageFilter = 'all';
+      
+      function filterMessages(type) {
+        window.currentMessageFilter = type;
+        const messageItems = document.querySelectorAll('.message-item');
+        const filterBtns = document.querySelectorAll('.filter-btn');
+        
+        // Update button states
+        filterBtns.forEach(btn => {
+          btn.classList.remove('active');
+          btn.style.background = 'transparent';
+        });
+        
+        const activeBtn = document.querySelector(`[onclick="filterMessages('${type}')"]`);
+        if (activeBtn) {
+          activeBtn.classList.add('active');
+          activeBtn.style.background = 'rgba(255,152,0,0.2)';
+        }
+        
+        // Filter messages
+        messageItems.forEach(item => {
+          if (type === 'all') {
+            item.style.display = 'block';
+          } else {
+            const isMatch = item.classList.contains(`message-${type}`);
+            item.style.display = isMatch ? 'block' : 'none';
+          }
+        });
+      }
+      
+      function clearMessageLog() {
+        const messageLog = document.getElementById('message-log');
+        if (messageLog) {
+          messageLog.innerHTML = '<div class="message-item message-sys">[System] Message log cleared</div>';
+        }
+      }
+      
+      function exportMessages() {
+        const messageItems = document.querySelectorAll('.message-item');
+        const messages = Array.from(messageItems).map(item => item.textContent).join('\n');
+        
+        const blob = new Blob([messages], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `bot-messages-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        URL.revokeObjectURL(url);
+        addMessage('📤 Messages exported to file', 'sys');
+      }
+      
+      // Window state management for synchronization
+      window.windowStates = {
+        'bot-management-panel': { visible: true, collapsed: false, position: { x: null, y: null } },
+        'message-streaming-panel': { visible: true, collapsed: false, position: { x: null, y: null } },
+        'bot-info-panel': { visible: false, collapsed: false, position: { x: null, y: null } }
+      };
+      
+      function saveWindowState(windowId) {
+        const windowEl = document.getElementById(windowId);
+        if (!windowEl || !window.windowStates[windowId]) return;
+        
+        const rect = windowEl.getBoundingClientRect();
+        window.windowStates[windowId] = {
+          visible: windowEl.style.display !== 'none',
+          collapsed: windowEl.classList.contains('window-collapsed'),
+          position: {
+            x: parseInt(windowEl.style.left) || rect.left,
+            y: parseInt(windowEl.style.top) || rect.top
+          }
+        };
+      }
+      
+      // Panel visibility toggle with state management
+      function togglePanelVisibility(panelId) {
+        const panel = document.getElementById(panelId);
+        if (!panel) return;
+        
+        const isVisible = panel.style.display !== 'none';
+        
+        if (isVisible) {
+          saveWindowState(panelId);
+          hidePanel(panelId);
+        } else {
+          showPanel(panelId);
+          restoreWindowState(panelId);
+        }
+        
+        // Update button appearance
+        const navBtn = document.querySelector(`[onclick="togglePanelVisibility('${panelId}')"]`);
+        if (navBtn) {
+          if (isVisible) {
+            navBtn.classList.remove('active');
+          } else {
+            navBtn.classList.add('active');
+          }
+        }
+      }
+      
+      // Enhanced addMessage with filtering support
+      const originalAddMessage = addMessage;
+      function addMessage(message, channel = 'app') {
+        const messageLog = document.getElementById('message-log');
+        if (!messageLog) return;
+        
+        const messageItem = document.createElement('div');
+        messageItem.className = `message-item message-${channel}`;
+        messageItem.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        
+        // Apply current filter
+        if (window.currentMessageFilter && window.currentMessageFilter !== 'all' && window.currentMessageFilter !== channel) {
+          messageItem.style.display = 'none';
+        }
+        
+        messageLog.appendChild(messageItem);
+        messageLog.scrollTop = messageLog.scrollHeight;
+        
+        // Keep only last 100 messages for better performance
+        while (messageLog.children.length > 100) {
+          messageLog.removeChild(messageLog.firstChild);
+        }
+      }
+      
+      // Initialize window states on load
+      function initializeWindowStates() {
+        Object.keys(window.windowStates).forEach(windowId => {
+          const windowEl = document.getElementById(windowId);
+          if (windowEl) {
+            // Set initial button states
+            const navBtn = document.querySelector(`[onclick="togglePanelVisibility('${windowId}')"]`);
+            if (navBtn) {
+              if (window.windowStates[windowId].visible) {
+                navBtn.classList.add('active');
+              }
+            }
+          }
+        });
+      }
+      
+      // Call initialization when page loads
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeWindowStates);
+      } else {
+        initializeWindowStates();
+      }
+      
+      function restoreWindowState(windowId) {
+        const windowEl = document.getElementById(windowId);
+        const state = window.windowStates[windowId];
+        
+        if (!windowEl || !state) return;
+        
+        // Restore visibility
+        windowEl.style.display = state.visible ? 'block' : 'none';
+        
+        // Restore collapsed state
+        if (state.collapsed) {
+          windowEl.classList.add('window-collapsed');
+          const minimizeBtn = windowEl.querySelector('.minimize-btn');
+          if (minimizeBtn) minimizeBtn.textContent = '+';
+        } else {
+          windowEl.classList.remove('window-collapsed');
+          const minimizeBtn = windowEl.querySelector('.minimize-btn');
+          if (minimizeBtn) minimizeBtn.textContent = '−';
+        }
+        
+        // Restore position
+        if (state.position.x !== null && state.position.y !== null) {
+          windowEl.style.left = state.position.x + 'px';
+          windowEl.style.top = state.position.y + 'px';
+          windowEl.style.transform = 'none';
+        }
       }
 
       function addMessage(message, channel = 'app') {
