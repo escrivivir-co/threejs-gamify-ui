@@ -3087,6 +3087,11 @@
       
       // Frustum culling for better performance
       function setupFrustumCulling() {
+        // Check if camera is available
+        if (!window.camera || !window.camera.projectionMatrix) {
+          return; // Skip if camera not initialized yet
+        }
+        
         if (!window.frustum) {
           window.frustum = new THREE.Frustum();
           window.cameraMatrix = new THREE.Matrix4();
@@ -3106,7 +3111,16 @@
       
       // Level of Detail (LOD) system for bots
       function updateLOD() {
+        // Check if camera is available
+        if (!window.camera || !window.camera.position) {
+          return; // Skip if camera not initialized yet
+        }
+        
         const cameraPosition = window.camera.position;
+        
+        if (!window.bots) {
+          return; // Skip if bots not initialized yet
+        }
         
         window.bots.forEach((bot, botId) => {
           if (!bot.mesh) return;
