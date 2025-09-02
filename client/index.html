@@ -225,12 +225,88 @@
 
       .immersive-controls {
         position: absolute;
-        bottom: 20px;
+        bottom: 80px;
         left: 50%;
         transform: translateX(-50%);
         display: flex;
         gap: 10px;
         z-index: 100;
+      }
+      
+      .footer-nav-bar {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(90deg, rgba(0,0,0,0.9), rgba(30,30,30,0.9));
+        border-top: 2px solid #4CAF50;
+        padding: 10px;
+        display: flex;
+        justify-content: space-around;
+        gap: 16px;
+        z-index: 120;
+        backdrop-filter: blur(10px);
+        height: 70px;
+        overflow-x: auto;
+      }
+      
+      .nav-section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        min-width: 120px;
+        flex-shrink: 0;
+      }
+      
+      .nav-section h4 {
+        margin: 0;
+        font-size: 10px;
+        color: #4CAF50;
+        text-align: center;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 2px;
+      }
+      
+      .nav-btn {
+        background: rgba(76, 175, 80, 0.1);
+        border: 1px solid #4CAF50;
+        color: #4CAF50;
+        padding: 4px 8px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 10px;
+        font-weight: 500;
+        white-space: nowrap;
+        min-width: 70px;
+        text-align: center;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      
+      .nav-btn:hover {
+        background: rgba(76, 175, 80, 0.2);
+        border-color: #66BB6A;
+        color: #66BB6A;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+      }
+      
+      .nav-btn:active {
+        background: #4CAF50;
+        color: #000;
+        transform: translateY(0);
+      }
+      
+      .nav-btn.active {
+        background: #4CAF50;
+        color: #000;
+        border-color: #4CAF50;
       }
 
       .control-icon {
@@ -307,6 +383,33 @@
           <button class="control-icon" onclick="toggleAutoRotate()" title="Auto Rotate">🔄</button>
           <button class="control-icon" onclick="focusHub()" title="Focus Hub">🏠</button>
           <button class="control-icon" onclick="toggleFullscreen()" title="Fullscreen">⛶</button>
+        </div>
+        
+        <!-- Enhanced Footer Navigation Bar -->
+        <div class="footer-nav-bar">
+          <div class="nav-section cardinal-navigation">
+            <h4>Cardinal Focus</h4>
+            <button class="nav-btn" onclick="focusCardinal('north')" title="Focus North Cardinal">⬆️ North</button>
+            <button class="nav-btn" onclick="focusCardinal('south')" title="Focus South Cardinal">⬇️ South</button>
+            <button class="nav-btn" onclick="focusCardinal('east')" title="Focus East Cardinal">➡️ East</button>
+            <button class="nav-btn" onclick="focusCardinal('west')" title="Focus West Cardinal">⬅️ West</button>
+          </div>
+          
+          <div class="nav-section view-options">
+            <h4>View Options</h4>
+            <button class="nav-btn" onclick="toggleBirdEyeView()" title="Bird's Eye View">🦅 Bird View</button>
+            <button class="nav-btn" onclick="toggleSpiralView()" title="Spiral View">🌀 Spiral View</button>
+            <button class="nav-btn" onclick="focusActiveBot()" title="Focus Most Active Bot">⚡ Active Bot</button>
+            <button class="nav-btn" onclick="toggleMessageTrails()" title="Toggle Message Trails">✨ Trails</button>
+          </div>
+          
+          <div class="nav-section sync-controls">
+            <h4>Sync & Activity</h4>
+            <button class="nav-btn" onclick="reorderBotsByActivity()" title="Reorder by Message Activity">📈 Reorder</button>
+            <button class="nav-btn" onclick="syncRemoteBots()" title="Sync Remote Bots">🔄 Sync Bots</button>
+            <button class="nav-btn" onclick="showRoomActivity()" title="Show Room Activity">🏠 Rooms</button>
+            <button class="nav-btn" onclick="toggleRealTimeStats()" title="Toggle Real-time Stats">📊 Stats</button>
+          </div>
         </div>
 
         <div class="bot-hover-effect" id="bot-hover-effect"></div>
@@ -620,6 +723,14 @@
         window.botPositions = new Map();
         window.messageTrajectories = [];
         window.particleSystem = [];
+        
+        // Enhanced navigation and sync state
+        window.currentView = 'default';
+        window.messageTrailsVisible = true;
+        window.realTimeStatsVisible = false;
+        window.botActivityOrder = new Map();
+        window.roomActivity = new Map();
+        window.remoteBotsSync = true;
 
         // Add mouse event listeners with enhanced functionality
         canvas.addEventListener('mousemove', onMouseMove);
@@ -961,32 +1072,215 @@
           transports: ['websocket', 'polling']
         });
 
+        // Enhanced RxJS-Socket.io Bridge for reactive bot synchronization
+        console.log('Initializing RxJS-Socket.io bridge architecture...');
+        
         window.socket.on('connect', () => {
           console.log('Socket connected:', window.socket.id);
-          addMessage('Socket.io connection established', 'sys');
+          addMessage('🔌 RxJS-Socket.io bridge established - Remote bots can now sync', 'sys');
+          
+          window.remoteBotsSync = true;
+          
+          // Request initial bot configuration with cardinal and room data
+          window.socket.emit('request_bot_configuration', {
+            requestCardinalData: true,
+            requestRoomData: true,
+            requestActivityData: true,
+            timestamp: Date.now()
+          });
         });
 
         window.socket.on('disconnect', () => {
           console.log('Socket disconnected');
-          addMessage('Socket.io connection lost', 'sys');
+          addMessage('🔌 RxJS-Socket.io bridge disconnected - Remote sync paused', 'sys');
+          window.remoteBotsSync = false;
         });
 
+        // Enhanced bot status updates with room and cardinal data
         window.socket.on('bot:status', (data) => {
           updateBotStatus(data.botId, data.status);
-          addMessage(`Bot ${data.botId}: ${data.status}`, 'app');
+          
+          // Update bot room assignment if provided
+          if (data.room && window.bots.has(data.botId)) {
+            const bot = window.bots.get(data.botId);
+            bot.room = data.room;
+            
+            // Update room activity tracking
+            if (!window.roomActivity.has(data.room)) {
+              window.roomActivity.set(data.room, {
+                bots: [],
+                totalMessages: 0,
+                lastActivity: Date.now()
+              });
+            }
+            
+            const roomData = window.roomActivity.get(data.room);
+            if (!roomData.bots.includes(data.botId)) {
+              roomData.bots.push(data.botId);
+            }
+            roomData.lastActivity = Date.now();
+          }
+          
+          addMessage(`🤖 Bot ${data.botId}: ${data.status} (room: ${data.room || 'unassigned'}, cardinal: ${data.cardinal || 'auto'})`, 'app');
         });
 
+        // Enhanced message handling with spiral trajectory and room routing
         window.socket.on('message', (data) => {
-          addMessage(`${data.botId}: ${data.message}`, data.channel || 'app');
+          const messageData = {
+            botId: data.botId,
+            message: data.message,
+            channel: data.channel || 'app',
+            room: data.room,
+            cardinal: data.cardinal,
+            trajectory: data.trajectory,
+            timestamp: Date.now()
+          };
           
-          // Increment message counter
+          // Handle spiral trajectory messages
+          if (data.trajectory === 'spiral' && data.from && data.to) {
+            createSpiralTrajectory(data.from, data.to, data.message);
+            addMessage(`🌀 Spiral: ${data.from} → ${data.to} via ${data.from_cardinal || 'unknown'}→center→${data.to_cardinal || 'unknown'}: "${data.message}"`, data.channel || 'app');
+          } else {
+            addMessage(`📨 ${data.botId}: ${data.message}`, data.channel || 'app');
+          }
+          
+          // Increment message counter and update room activity
           const currentCount = window.messageCounters.get(data.botId) || 0;
           window.messageCounters.set(data.botId, currentCount + 1);
           
+          if (data.room && window.roomActivity.has(data.room)) {
+            const roomData = window.roomActivity.get(data.room);
+            roomData.totalMessages++;
+            roomData.lastActivity = Date.now();
+          }
+          
+          // Animate message particle if Three.js is available
           if (typeof THREE !== 'undefined') {
             animateMessageParticle(data.botId);
           }
         });
+        
+        // New event handlers for enhanced bot synchronization
+        window.socket.on('bot_configuration', (config) => {
+          console.log('Received bot configuration:', config);
+          
+          config.bots?.forEach(botData => {
+            const enhancedBot = {
+              id: botData.id,
+              name: botData.name || botData.id,
+              status: botData.status || 'inactive',
+              cardinal: botData.cardinal || assignCardinal(botData.id),
+              room: botData.room || `${botData.cardinal || 'default'}-room`,
+              position: botData.position || getDefaultPosition(botData.cardinal, botData.spiralIndex),
+              spiralIndex: botData.spiralIndex || 0,
+              messageActivity: botData.messageActivity || 0,
+              lastSeen: Date.now()
+            };
+            
+            window.bots.set(botData.id, enhancedBot);
+            window.messageCounters.set(botData.id, enhancedBot.messageActivity);
+            
+            // Update room tracking
+            if (!window.roomActivity.has(enhancedBot.room)) {
+              window.roomActivity.set(enhancedBot.room, {
+                bots: [enhancedBot.id],
+                totalMessages: enhancedBot.messageActivity,
+                lastActivity: Date.now()
+              });
+            }
+          });
+          
+          // Re-render bots with new configuration
+          renderBots();
+          updateBotList();
+          
+          addMessage(`📡 Synced ${config.bots?.length || 0} remote bots with cardinal spiral positioning`, 'sys');
+        });
+        
+        // Handle sync responses
+        window.socket.on('sync_remote_bots_response', (response) => {
+          console.log('Sync response received:', response);
+          
+          if (response.success) {
+            addMessage(`✅ Remote bot sync completed: ${response.botCount} bots across ${response.roomCount} rooms`, 'sys');
+            
+            // Update activity data if provided
+            if (response.activityData) {
+              response.activityData.forEach(activity => {
+                if (window.bots.has(activity.botId)) {
+                  window.messageCounters.set(activity.botId, activity.messageCount);
+                }
+              });
+              
+              // Trigger reorder by activity
+              setTimeout(() => reorderBotsByActivity(), 1000);
+            }
+          } else {
+            addMessage(`❌ Remote bot sync failed: ${response.error}`, 'sys');
+          }
+        });
+        
+        // Assign cardinal direction to bot based on ID with room consideration
+        function assignCardinal(botId) {
+          const cardinals = ['north', 'south', 'east', 'west'];
+          
+          // Extract cardinal from bot ID if it contains directional hints
+          if (botId.includes('-n')) return 'north';
+          if (botId.includes('-s')) return 'south';
+          if (botId.includes('-e')) return 'east';
+          if (botId.includes('-w')) return 'west';
+          
+          // Hash-based assignment for consistent distribution
+          const hash = botId.split('').reduce((a, b) => {
+            a = ((a << 5) - a) + b.charCodeAt(0);
+            return a & a;
+          }, 0);
+          
+          return cardinals[Math.abs(hash) % cardinals.length];
+        }
+        
+        // Get default position for bot based on cardinal and spiral index
+        function getDefaultPosition(cardinal, spiralIndex = 0) {
+          const baseDistance = 8;
+          const spiralOffset = spiralIndex * 1.5;
+          const angle = spiralIndex * 0.4;
+          
+          let basePos;
+          switch ((cardinal || 'north').toLowerCase()) {
+            case 'north':
+              basePos = new THREE.Vector3(
+                Math.sin(angle) * spiralOffset,
+                0,
+                -(baseDistance + spiralOffset)
+              );
+              break;
+            case 'south':
+              basePos = new THREE.Vector3(
+                Math.sin(angle) * spiralOffset,
+                0,
+                baseDistance + spiralOffset
+              );
+              break;
+            case 'east':
+              basePos = new THREE.Vector3(
+                baseDistance + spiralOffset,
+                0,
+                Math.sin(angle) * spiralOffset
+              );
+              break;
+            case 'west':
+              basePos = new THREE.Vector3(
+                -(baseDistance + spiralOffset),
+                0,
+                Math.sin(angle) * spiralOffset
+              );
+              break;
+            default:
+              basePos = new THREE.Vector3(baseDistance, 0, 0);
+          }
+          
+          return basePos;
+        }
       }
 
       function updateBotList() {
@@ -1395,6 +1689,323 @@
         // Start animation
         addMessage(`🚀 Message particle launched from ${fromId}`, 'app');
         animateParticle();
+      }
+      
+      // Enhanced Footer Navigation Functions
+      
+      // Focus on specific cardinal directions
+      function focusCardinal(cardinal) {
+        const cardinalPosition = getCardinalPosition(cardinal);
+        const cameraOffset = new THREE.Vector3(0, 8, 8);
+        
+        focusOnPosition(cardinalPosition.clone().add(cameraOffset), `${cardinal} cardinal`);
+        
+        // Highlight bots in this cardinal
+        highlightCardinalBots(cardinal);
+        addMessage(`🧭 Focusing on ${cardinal.toUpperCase()} cardinal direction`, 'ui');
+      }
+      
+      // Highlight bots belonging to a specific cardinal
+      function highlightCardinalBots(cardinal) {
+        window.bots.forEach((bot, botId) => {
+          if (bot.cardinal.toLowerCase() === cardinal.toLowerCase()) {
+            // Add highlight effect
+            if (bot.mesh) {
+              bot.mesh.material.emissive = new THREE.Color(0x444444);
+              setTimeout(() => {
+                if (bot.mesh) bot.mesh.material.emissive = new THREE.Color(0x000000);
+              }, 2000);
+            }
+          }
+        });
+      }
+      
+      // Toggle bird's eye view
+      function toggleBirdEyeView() {
+        if (window.currentView === 'bird-eye') {
+          resetCamera();
+          window.currentView = 'default';
+          document.querySelector('button[onclick="toggleBirdEyeView()"]').classList.remove('active');
+        } else {
+          window.camera.position.set(0, 25, 0);
+          window.camera.lookAt(0, 0, 0);
+          window.controls.target.set(0, 0, 0);
+          window.currentView = 'bird-eye';
+          document.querySelector('button[onclick="toggleBirdEyeView()"]').classList.add('active');
+          addMessage('🦅 Bird\'s eye view activated', 'ui');
+        }
+      }
+      
+      // Toggle spiral view focusing on bot arrangements
+      function toggleSpiralView() {
+        if (window.currentView === 'spiral') {
+          resetCamera();
+          window.currentView = 'default';
+          document.querySelector('button[onclick="toggleSpiralView()"]').classList.remove('active');
+        } else {
+          window.camera.position.set(12, 12, 12);
+          window.camera.lookAt(0, 0, 0);
+          window.controls.target.set(0, 0, 0);
+          window.currentView = 'spiral';
+          document.querySelector('button[onclick="toggleSpiralView()"]').classList.add('active');
+          addMessage('🌀 Spiral view activated - observing bot arrangements', 'ui');
+        }
+      }
+      
+      // Focus on the most active bot
+      function focusActiveBot() {
+        let mostActiveBot = null;
+        let maxMessages = 0;
+        
+        window.messageCounters.forEach((count, botId) => {
+          if (count > maxMessages) {
+            maxMessages = count;
+            mostActiveBot = botId;
+          }
+        });
+        
+        if (mostActiveBot && window.bots.has(mostActiveBot)) {
+          const bot = window.bots.get(mostActiveBot);
+          focusOnPosition(bot.position, mostActiveBot);
+          showBotInfo(mostActiveBot);
+          addMessage(`⚡ Focused on most active bot: ${mostActiveBot} (${maxMessages} messages)`, 'ui');
+        } else {
+          addMessage('No bot activity detected yet', 'sys');
+        }
+      }
+      
+      // Toggle message trails visibility
+      function toggleMessageTrails() {
+        window.messageTrailsVisible = !window.messageTrailsVisible;
+        const btn = document.querySelector('button[onclick="toggleMessageTrails()"]');
+        
+        if (window.messageTrailsVisible) {
+          btn.classList.add('active');
+          addMessage('✨ Message trails enabled', 'ui');
+        } else {
+          btn.classList.remove('active');
+          // Hide existing trail particles
+          window.particleSystem.forEach(particle => {
+            if (particle.parent) particle.parent.remove(particle);
+          });
+          window.particleSystem = [];
+          addMessage('✨ Message trails disabled', 'ui');
+        }
+      }
+      
+      // Reorder bots by message activity
+      function reorderBotsByActivity() {
+        const botActivity = [];
+        
+        window.bots.forEach((bot, botId) => {
+          const messageCount = window.messageCounters.get(botId) || 0;
+          botActivity.push({ botId, bot, messageCount, cardinal: bot.cardinal });
+        });
+        
+        // Sort by activity within each cardinal
+        const cardinals = ['north', 'south', 'east', 'west'];
+        cardinals.forEach(cardinal => {
+          const cardinalBots = botActivity.filter(b => b.cardinal.toLowerCase() === cardinal);
+          cardinalBots.sort((a, b) => b.messageCount - a.messageCount);
+          
+          // Reposition bots in spiral based on activity
+          cardinalBots.forEach((botData, index) => {
+            repositionBotInSpiral(botData.botId, cardinal, index);
+          });
+        });
+        
+        addMessage('📈 Bots reordered by message activity in spiral formation', 'ui');
+      }
+      
+      // Reposition bot in cardinal spiral based on activity rank
+      function repositionBotInSpiral(botId, cardinal, activityRank) {
+        const bot = window.bots.get(botId);
+        if (!bot || !bot.mesh) return;
+        
+        const baseDistance = 8;
+        const spiralOffset = activityRank * 2; // More active bots closer to cardinal point
+        const angle = activityRank * 0.3; // Slight spiral arrangement
+        
+        let newPosition;
+        switch (cardinal.toLowerCase()) {
+          case 'north':
+            newPosition = new THREE.Vector3(
+              Math.sin(angle) * spiralOffset,
+              0,
+              -(baseDistance + spiralOffset)
+            );
+            break;
+          case 'south':
+            newPosition = new THREE.Vector3(
+              Math.sin(angle) * spiralOffset,
+              0,
+              baseDistance + spiralOffset
+            );
+            break;
+          case 'east':
+            newPosition = new THREE.Vector3(
+              baseDistance + spiralOffset,
+              0,
+              Math.sin(angle) * spiralOffset
+            );
+            break;
+          case 'west':
+            newPosition = new THREE.Vector3(
+              -(baseDistance + spiralOffset),
+              0,
+              Math.sin(angle) * spiralOffset
+            );
+            break;
+        }
+        
+        // Smooth transition to new position
+        animateBotToPosition(bot, newPosition);
+        window.botPositions.set(botId, newPosition);
+        bot.position = newPosition;
+      }
+      
+      // Animate bot to new position
+      function animateBotToPosition(bot, targetPosition) {
+        if (!bot.mesh) return;
+        
+        const startPos = bot.mesh.position.clone();
+        let progress = 0;
+        const animSpeed = 0.03;
+        
+        function animate() {
+          progress += animSpeed;
+          if (progress >= 1) {
+            bot.mesh.position.copy(targetPosition);
+            if (bot.line) {
+              bot.line.geometry.setFromPoints([new THREE.Vector3(0, 0, 0), targetPosition]);
+            }
+            return;
+          }
+          
+          bot.mesh.position.lerpVectors(startPos, targetPosition, progress);
+          if (bot.line) {
+            bot.line.geometry.setFromPoints([new THREE.Vector3(0, 0, 0), bot.mesh.position]);
+          }
+          
+          requestAnimationFrame(animate);
+        }
+        animate();
+      }
+      
+      // Sync with remote bots and update RxJS streams
+      function syncRemoteBots() {
+        if (window.socket && window.socket.connected) {
+          // Enhanced RxJS-Socket.io synchronization
+          window.socket.emit('sync_remote_bots', {
+            timestamp: Date.now(),
+            requestId: Math.random().toString(36).substr(2, 9)
+          });
+          
+          addMessage('🔄 Synchronizing with remote bots via RxJS-Socket.io bridge', 'sys');
+          
+          // Update sync status
+          window.remoteBotsSync = true;
+          const btn = document.querySelector('button[onclick="syncRemoteBots()"]');
+          btn.classList.add('active');
+          
+          setTimeout(() => {
+            btn.classList.remove('active');
+          }, 2000);
+        } else {
+          addMessage('❌ Socket connection not available for sync', 'sys');
+        }
+      }
+      
+      // Show room activity visualization
+      function showRoomActivity() {
+        const roomStats = new Map();
+        
+        window.bots.forEach((bot, botId) => {
+          if (bot.room) {
+            const current = roomStats.get(bot.room) || { bots: [], messages: 0 };
+            current.bots.push(botId);
+            current.messages += window.messageCounters.get(botId) || 0;
+            roomStats.set(bot.room, current);
+          }
+        });
+        
+        let roomReport = '🏠 Room Activity Report:\\n';
+        roomStats.forEach((stats, room) => {
+          roomReport += `${room}: ${stats.bots.length} bots, ${stats.messages} messages\\n`;
+        });
+        
+        addMessage(roomReport.replace(/\\n/g, ' | '), 'ui');
+      }
+      
+      // Toggle real-time statistics display
+      function toggleRealTimeStats() {
+        window.realTimeStatsVisible = !window.realTimeStatsVisible;
+        const btn = document.querySelector('button[onclick="toggleRealTimeStats()"]');
+        
+        if (window.realTimeStatsVisible) {
+          btn.classList.add('active');
+          createStatsOverlay();
+          addMessage('📊 Real-time statistics enabled', 'ui');
+        } else {
+          btn.classList.remove('active');
+          removeStatsOverlay();
+          addMessage('📊 Real-time statistics disabled', 'ui');
+        }
+      }
+      
+      // Create real-time stats overlay
+      function createStatsOverlay() {
+        const existing = document.getElementById('stats-overlay');
+        if (existing) existing.remove();
+        
+        const overlay = document.createElement('div');
+        overlay.id = 'stats-overlay';
+        overlay.style.cssText = `
+          position: absolute;
+          top: 10px;
+          left: 10px;
+          background: rgba(0,0,0,0.8);
+          color: #4CAF50;
+          padding: 10px;
+          border-radius: 8px;
+          font-family: monospace;
+          font-size: 12px;
+          z-index: 200;
+          min-width: 200px;
+        `;
+        
+        document.body.appendChild(overlay);
+        updateStatsOverlay();
+      }
+      
+      // Update stats overlay with current data
+      function updateStatsOverlay() {
+        const overlay = document.getElementById('stats-overlay');
+        if (!overlay) return;
+        
+        const totalBots = window.bots.size;
+        const activeBots = Array.from(window.bots.values()).filter(bot => bot.status === 'active').length;
+        const totalMessages = Array.from(window.messageCounters.values()).reduce((sum, count) => sum + count, 0);
+        
+        overlay.innerHTML = `
+          <div><strong>📊 Real-time Stats</strong></div>
+          <div>Total Bots: ${totalBots}</div>
+          <div>Active Bots: ${activeBots}</div>
+          <div>Messages Sent: ${totalMessages}</div>
+          <div>Socket Status: ${window.socket?.connected ? '🟢 Connected' : '🔴 Disconnected'}</div>
+          <div>Current View: ${window.currentView}</div>
+          <div>RxJS-Socket Sync: ${window.remoteBotsSync ? '🟢 Active' : '🔴 Inactive'}</div>
+        `;
+        
+        if (window.realTimeStatsVisible) {
+          setTimeout(updateStatsOverlay, 1000);
+        }
+      }
+      
+      // Remove stats overlay
+      function removeStatsOverlay() {
+        const overlay = document.getElementById('stats-overlay');
+        if (overlay) overlay.remove();
       }
 
       function addMessage(message, channel = 'app') {
