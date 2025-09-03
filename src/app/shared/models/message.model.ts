@@ -1,4 +1,4 @@
-import { ChannelType, MessageType, SocketMessage } from '../../core/bridge/interfaces';
+import { ChannelType, MessageType, SocketMessage } from '@lib/core/bridge/interfaces';
 
 export interface Message {
   id: string;

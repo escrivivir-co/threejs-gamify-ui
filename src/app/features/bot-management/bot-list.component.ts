@@ -3,9 +3,9 @@ import { CommonModule } from '@angular/common';
 import { Subject } from 'rxjs';
 import { takeUntil, filter } from 'rxjs/operators';
 
-import { SocketService } from '../../core/services/socket.service';
+import { SocketService } from '@lib/core/services/socket.service';
 import { Bot } from '../../shared/models/bot.model';
-import { SocketMessage, MessageType, BotStatusMessage, ChannelType } from '../../core/bridge/interfaces';
+import { SocketMessage, MessageType, BotStatusMessage, ChannelType } from '@lib/core/bridge/interfaces';
 
 @Component({
   selector: 'app-bot-list',

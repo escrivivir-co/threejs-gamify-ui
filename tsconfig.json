@@ -28,6 +28,9 @@
     "paths": {
       "threejs-ui-lib": [
         "./dist/threejs-ui-lib"
+      ],
+      "@lib/*": [
+        "./projects/threejs-ui-lib/src/lib/*"
       ]
     },
     "esModuleInterop": true

@@ -8,8 +8,12 @@ export * from './lib/threejs-ui-module';
 
 // Services
 export * from './lib/core/services/alephscript.service';
+export * from './lib/core/services/socket.service';
 export * from './lib/shared/three/three-scene.service';
 export * from './lib/core/bridge/rxjs-socket-bridge';
+
+// Test Components
+export * from './lib/components/alephscript-test/alephscript-test.component';
 
 // Types and interfaces
 export * from './lib/core/bridge/interfaces';

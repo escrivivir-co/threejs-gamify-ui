@@ -6,8 +6,8 @@ import { takeUntil } from 'rxjs/operators';
 import { BotListComponent } from './features/bot-management/bot-list.component';
 import { MessagePanelComponent } from './features/message-panel/message-panel.component';
 import { ThreeSceneService } from './shared/three/three-scene.service';
-import { RxjsSocketBridge } from './core/bridge/rxjs-socket-bridge';
-import { AlephScriptService } from './core/services/alephscript.service';
+import { RxjsSocketBridge } from '@lib/core/bridge/rxjs-socket-bridge';
+import { AlephScriptService } from '@lib/core/services/alephscript.service';
 
 @Component({
   selector: 'app-root',

@@ -3,9 +3,9 @@ import { CommonModule } from '@angular/common';
 import { Subject } from 'rxjs';
 import { takeUntil, scan } from 'rxjs/operators';
 
-import { SocketService } from '../../core/services/socket.service';
+import { SocketService } from '@lib/core/services/socket.service';
 import { Message } from '../../shared/models/message.model';
-import { SocketMessage, ChannelType, MessageType } from '../../core/bridge/interfaces';
+import { SocketMessage, ChannelType, MessageType } from '@lib/core/bridge/interfaces';
 
 @Component({
   selector: 'app-message-panel',

@@ -5,6 +5,7 @@ import { takeUntil } from 'rxjs/operators';
 
 import { BotListComponent } from './features/bot-management/bot-list.component';
 import { MessagePanelComponent } from './features/message-panel/message-panel.component';
+import { AlephScriptTestComponent } from './components/alephscript-test/alephscript-test.component';
 import { ThreeSceneService } from './shared/three/three-scene.service';
 import { RxjsSocketBridge } from './core/bridge/rxjs-socket-bridge';
 import { AlephScriptService } from './core/services/alephscript.service';
@@ -22,7 +23,8 @@ export interface ThreeJSUIConfig {
   imports: [
     CommonModule,
     BotListComponent,
-    MessagePanelComponent
+    MessagePanelComponent,
+    AlephScriptTestComponent
   ],
   template: `
     <div class="threejs-ui-container">
@@ -65,6 +67,9 @@ export interface ThreeJSUIConfig {
           <span class="performance-info">FPS: {{ currentFPS }}</span>
         </div>
       </div>
+      
+      <!-- AlephScript Test Component -->
+      <app-alephscript-test></app-alephscript-test>
     </div>
   `,
   styleUrls: ['./app.component.css']

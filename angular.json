@@ -24,16 +24,21 @@
             "tsConfig": "tsconfig.json",
             "assets": [
               "src/favicon.ico",
-              "src/assets"
+              "src/assets",
+              {
+                "glob": "**/*",
+                "input": "scripts/",
+                "output": "/vendor/",
+                "ignore": ["*.js"]
+              }
             ],
             "styles": [
               "src/styles.css"
             ],
-            "scripts": [
-              "src/assets/alephscript-client.js"
-            ],
+            "scripts": [],
             "allowedCommonJsDependencies": [
-              "rxjs"
+              "rxjs",
+              "socket.io-client"
             ]
           },
           "configurations": {

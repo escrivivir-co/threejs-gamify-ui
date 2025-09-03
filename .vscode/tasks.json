@@ -1,0 +1,25 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "build threejs-gamify-ui lib+app",
+			"type": "shell",
+			"command": "npm run build && npm pack",
+			"args": [],
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "build threejs-gamify-ui",
+			"type": "shell",
+			"command": "npm run build:package",
+			"args": [],
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		}
+	]
+}

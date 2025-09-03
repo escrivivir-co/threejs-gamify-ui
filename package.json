@@ -15,7 +15,7 @@
   },
   "scripts": {
     "dev": "tsx server/index.ts",
-    "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "build": "ng build",
     "build:package": "npm run build && npm pack",
     "pack": "npm pack",
     "postinstall": "node scripts/postinstall.cjs || echo 'Postinstall completed'",
