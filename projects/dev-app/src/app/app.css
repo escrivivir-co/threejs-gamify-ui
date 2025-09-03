@@ -1,0 +1,24 @@
+.app-container {
+  padding: 20px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+h1 {
+  color: #333;
+  border-bottom: 2px solid #ff0099;
+  padding-bottom: 10px;
+}
+
+p {
+  color: #666;
+  margin-bottom: 20px;
+}
+
+tjs-threejs-ui {
+  display: block;
+  width: 100%;
+  height: 600px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+}

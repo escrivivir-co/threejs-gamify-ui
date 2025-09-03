@@ -438,11 +438,11 @@ export class ThreeSceneService {
     }
     
     // Dispose of geometries and materials
-    this.scene?.traverse((object) => {
+    this.scene?.traverse((object: any) => {
       if (object instanceof THREE.Mesh) {
         object.geometry.dispose();
         if (Array.isArray(object.material)) {
-          object.material.forEach(material => material.dispose());
+          object.material.forEach((material: any) => material.dispose());
         } else {
           object.material.dispose();
         }

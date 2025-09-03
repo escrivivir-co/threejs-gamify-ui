@@ -1,11 +1,10 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subject } from 'rxjs';
-import { takeUntil, filter } from 'rxjs/operators';
+import { takeUntil } from 'rxjs/operators';
 
-import { SocketService } from '../../core/services/socket.service';
+import { AlephScriptService } from '../../core/services/alephscript.service';
 import { Bot } from '../../shared/models/bot.model';
-import { SocketMessage, MessageType, BotStatusMessage, ChannelType } from '../../core/bridge/interfaces';
 
 @Component({
   selector: 'app-bot-list',
@@ -20,7 +19,7 @@ export class BotListComponent implements OnInit, OnDestroy {
   bots: Bot[] = [];
   selectedBotIds = new Set<string>();
 
-  constructor(private socketService: SocketService) {}
+  constructor(private alephScriptService: AlephScriptService) {}
 
   ngOnInit() {
     console.log('BotListComponent initializing...');
@@ -28,22 +27,10 @@ export class BotListComponent implements OnInit, OnDestroy {
     // Initialize default bots (8 positions on cardinal spirals)
     this.initializeBots();
     
-    // Subscribe to bot status messages
-    this.socketService.sysMessages$
-      .pipe(
-        takeUntil(this.destroy$),
-        filter(msg => msg.type === MessageType.BOT_STATUS)
-      )
-      .subscribe((msg: BotStatusMessage) => {
-        this.updateBotStatus(msg);
-      });
-
-    // Subscribe to app messages for bot responses
-    this.socketService.appMessages$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(msg => {
-        console.log('Bot app message:', msg);
-      });
+    // Subscribe to AlephScript events if needed
+    // this.alephScriptService.onMessage((data) => {
+    //   console.log('AlephScript message:', data);
+    // });
   }
 
   private initializeBots(): void {
@@ -85,20 +72,6 @@ export class BotListComponent implements OnInit, OnDestroy {
     console.log('Initialized bots:', this.bots);
   }
 
-  private updateBotStatus(message: BotStatusMessage): void {
-    const bot = this.bots.find(b => b.id === message.botId);
-    if (bot) {
-      bot.status = message.status;
-      bot.lastActive = new Date();
-      
-      if (message.position) {
-        bot.position = message.position;
-      }
-      
-      console.log('Updated bot status:', bot);
-    }
-  }
-
   onBotClick(bot: Bot): void {
     if (this.selectedBotIds.has(bot.id)) {
       this.selectedBotIds.delete(bot.id);
@@ -106,46 +79,39 @@ export class BotListComponent implements OnInit, OnDestroy {
       this.selectedBotIds.add(bot.id);
     }
     
-    // Send user action to Socket.io
-    this.socketService.sendUserAction('bot_selected', {
-      botId: bot.id,
-      selected: this.selectedBotIds.has(bot.id)
-    });
-    
     console.log('Bot clicked:', bot.id, 'Selected:', this.selectedBotIds.has(bot.id));
   }
 
   startBot(bot: Bot, event: Event): void {
     event.stopPropagation();
-    
     console.log('Starting bot:', bot.id);
-    this.socketService.sendBotCommand(bot.id, 'start');
+    // TODO: Implement AlephScript bot start command
   }
 
   stopBot(bot: Bot, event: Event): void {
     event.stopPropagation();
-    
     console.log('Stopping bot:', bot.id);
-    this.socketService.sendBotCommand(bot.id, 'stop');
+    // TODO: Implement AlephScript bot stop command
   }
 
   resetBot(bot: Bot, event: Event): void {
     event.stopPropagation();
-    
     console.log('Resetting bot:', bot.id);
-    this.socketService.sendBotCommand(bot.id, 'reset');
+    // TODO: Implement AlephScript bot reset command
   }
 
   startAllSelected(): void {
     this.selectedBotIds.forEach(botId => {
-      this.socketService.sendBotCommand(botId, 'start');
+      console.log('Starting bot:', botId);
+      // TODO: Implement AlephScript bot start command
     });
     console.log('Started all selected bots');
   }
 
   stopAllSelected(): void {
     this.selectedBotIds.forEach(botId => {
-      this.socketService.sendBotCommand(botId, 'stop');
+      console.log('Stopping bot:', botId);
+      // TODO: Implement AlephScript bot stop command
     });
     console.log('Stopped all selected bots');
   }

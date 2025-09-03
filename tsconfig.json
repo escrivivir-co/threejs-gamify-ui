@@ -26,6 +26,9 @@
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "paths": {
+      "@escrivivir/threejs-ui-lib": [
+        "./dist/threejs-ui-lib"
+      ],
       "threejs-ui-lib": [
         "./dist/threejs-ui-lib"
       ],
@@ -65,6 +68,12 @@
     },
     {
       "path": "./projects/threejs-ui-lib/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/dev-app/tsconfig.app.json"
+    },
+    {
+      "path": "./projects/dev-app/tsconfig.spec.json"
     }
   ]
 }

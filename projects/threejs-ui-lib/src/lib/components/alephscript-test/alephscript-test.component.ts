@@ -1,13 +1,16 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { AlephScriptService } from '../../core/services/alephscript.service';
 import { Subject, takeUntil } from 'rxjs';
 
 @Component({
   selector: 'app-alephscript-test',
+  standalone: true,
+  imports: [CommonModule],
   template: `
     <div class="alephscript-status">
       <h3>🔗 AlephScript Connection Status</h3>
-      <div class="status-indicator" [ngClass]="statusClass">
+      <div class="status-indicator" [class]="statusClass">
         {{ connectionStatus }}
       </div>
       <div class="controls" *ngIf="isConnected">
@@ -114,7 +117,7 @@ export class AlephScriptTestComponent implements OnInit, OnDestroy {
     // Subscribe to connection status
     this.alephScript.getConnectionStatus()
       .pipe(takeUntil(this.destroy$))
-      .subscribe(status => {
+      .subscribe((status: string) => {
         this.connectionStatus = this.formatStatus(status);
         this.statusClass = this.getStatusClass(status);
         this.isConnected = status === 'connected';
@@ -122,8 +125,8 @@ export class AlephScriptTestComponent implements OnInit, OnDestroy {
         this.debugInfo = {
           status: status,
           timestamp: new Date().toISOString(),
-          clientAvailable: !!this.alephScript.getClient(),
-          scriptsLoaded: this.alephScript.isConnected()
+          clientAvailable: this.alephScript.isSocketConnected(),
+          scriptsLoaded: this.alephScript.isSocketConnected()
         };
         
         if (this.isConnected) {
@@ -131,28 +134,17 @@ export class AlephScriptTestComponent implements OnInit, OnDestroy {
         }
       });
     
-    // Auto-connect
-    this.connectToAlephScript();
-  }
-  
-  private async connectToAlephScript(): Promise<void> {
-    try {
-      await this.alephScript.connect({
-        clientId: 'angular-test-component',
-        serverUrl: 'http://localhost:3000',
-        debug: true
-      });
-      
-      console.log('✅ Test component connected to AlephScript');
-      
-    } catch (error) {
-      console.error('Failed to connect to AlephScript:', error);
-      this.debugInfo.error = error;
-    }
+    // Configure AlephScript
+    this.alephScript.configure({
+      serverUrl: 'http://localhost:3000',
+      uiType: 'test-component',
+      uiId: 'angular-test',
+      debug: true
+    });
   }
   
   private setupEventListeners(): void {
-    this.alephScript.on('message', (data) => {
+    this.alephScript.on('message', (data: any) => {
       console.log('📨 Received message in test component:', data);
       this.debugInfo.lastMessage = {
         data: data,
@@ -160,7 +152,7 @@ export class AlephScriptTestComponent implements OnInit, OnDestroy {
       };
     });
     
-    this.alephScript.on('ui:notification', (data) => {
+    this.alephScript.on('ui:notification', (data: any) => {
       console.log('🔔 UI Notification:', data);
       this.debugInfo.lastNotification = data;
     });
@@ -174,14 +166,17 @@ export class AlephScriptTestComponent implements OnInit, OnDestroy {
       component: 'AlephScriptTestComponent'
     };
     
-    this.alephScript.emit('ui:test', testMessage);
+    this.alephScript.sendUserAction('ui:test', testMessage);
     console.log('📤 Sent test message:', testMessage);
     
     this.debugInfo.lastSentMessage = testMessage;
   }
   
   requestConfiguration(): void {
-    this.alephScript.requestBotConfiguration();
+    this.alephScript.sendMessage('bot_config_request', {
+      requester: 'test-component',
+      timestamp: Date.now()
+    });
     console.log('🔧 Requested bot configuration');
     
     this.debugInfo.configurationRequested = new Date().toISOString();

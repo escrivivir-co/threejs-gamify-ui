@@ -49,13 +49,46 @@ import { AlephScriptService } from './core/services/alephscript.service';
           <app-message-panel></app-message-panel>
         </div>
         
-        <!-- Bottom Panel - Controls -->
+        <!-- Bottom Panel - Enhanced Controls -->
         <div class="bottom-panel ui-panel">
-          <button class="btn" (click)="toggleDemo()">
-            {{ isDemoRunning ? 'Stop Demo' : 'Start Demo' }}
-          </button>
-          <button class="btn" (click)="resetScene()">Reset Scene</button>
-          <span class="performance-info">FPS: {{ currentFPS }}</span>
+          <div class="controls-section">
+            <button class="btn primary" (click)="toggleDemo()">
+              {{ isDemoRunning ? 'Stop Demo' : 'Start Demo' }}
+            </button>
+            <button class="btn secondary" (click)="resetScene()">Reset Scene</button>
+            <button class="btn" (click)="toggleFullscreen()">Fullscreen</button>
+            <button class="btn" (click)="captureScreenshot()">Screenshot</button>
+          </div>
+          <div class="performance-section">
+            <span class="performance-info">FPS: {{ currentFPS }}</span>
+            <span class="performance-info">Objects: {{ sceneObjects }}</span>
+            <span class="performance-info">Memory: {{ memoryUsage }}MB</span>
+          </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer-panel ui-panel">
+          <div class="footer-content">
+            <div class="footer-left">
+              <span class="app-version">ThreeJS UI Library v{{ version }}</span>
+              <span class="separator">|</span>
+              <span class="engine-info">Three.js {{ threeVersion }}</span>
+            </div>
+            <div class="footer-center">
+              <span class="status-text">{{ statusMessage }}</span>
+            </div>
+            <div class="footer-right">
+              <button class="btn-icon" (click)="toggleSettings()" title="Settings">
+                ⚙️
+              </button>
+              <button class="btn-icon" (click)="toggleHelp()" title="Help">
+                ❓
+              </button>
+              <button class="btn-icon" (click)="toggleDebug()" title="Debug" [class.active]="debugMode">
+                🐛
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -72,6 +105,12 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   connectionStatus = 'disconnected';
   isDemoRunning = false;
   currentFPS = 0;
+  sceneObjects = 0;
+  memoryUsage = 0;
+  version = '1.0.0';
+  threeVersion = '0.170.0';
+  statusMessage = 'Initializing...';
+  debugMode = false;
 
   constructor(
     private threeSceneService: ThreeSceneService,
@@ -120,6 +159,10 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
       // Mark as loaded
       this.isLoading = false;
+      this.statusMessage = 'Ready';
+      
+      // Start performance monitoring
+      this.startPerformanceMonitoring();
       
       // Hide initial loading indicator
       const loadingElement = document.getElementById('loading');

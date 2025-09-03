@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ElementRef, ViewChild, AfterViewInit, Input } from '@angular/core';
+import { Component, OnInit, OnDestroy, ElementRef, ViewChild, AfterViewInit, Input, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -7,7 +7,6 @@ import { BotListComponent } from './features/bot-management/bot-list.component';
 import { MessagePanelComponent } from './features/message-panel/message-panel.component';
 import { AlephScriptTestComponent } from './components/alephscript-test/alephscript-test.component';
 import { ThreeSceneService } from './shared/three/three-scene.service';
-import { RxjsSocketBridge } from './core/bridge/rxjs-socket-bridge';
 import { AlephScriptService } from './core/services/alephscript.service';
 
 export interface ThreeJSUIConfig {
@@ -64,6 +63,27 @@ export interface ThreeJSUIConfig {
             {{ isDemoRunning ? 'Stop Demo' : 'Start Demo' }}
           </button>
           <button class="btn" (click)="resetScene()">Reset Scene</button>
+          
+          <!-- Connection Controls -->
+          <div class="connection-controls">
+            <button class="btn btn-primary" 
+                    *ngIf="connectionStatus === 'disconnected' || connectionStatus === 'error'"
+                    (click)="connectToAlephScript()">
+              {{ isLoading ? 'Connecting...' : 'Connect' }}
+            </button>
+            
+            <button class="btn btn-danger" 
+                    *ngIf="connectionStatus === 'connected'"
+                    (click)="disconnectFromAlephScript()">
+              Disconnect
+            </button>
+            
+            <button class="btn btn-warning" 
+                    (click)="toggleOfflineMode()">
+              {{ alephScriptService.isFallbackMode() ? 'Try Reconnect' : 'Offline Mode' }}
+            </button>
+          </div>
+          
           <span class="performance-info">FPS: {{ currentFPS }}</span>
         </div>
       </div>
@@ -88,30 +108,55 @@ export class ThreeJSUIComponent implements OnInit, OnDestroy, AfterViewInit {
 
   constructor(
     private threeSceneService: ThreeSceneService,
-    private alephScriptService: AlephScriptService,
-    private rxjsSocketBridge: RxjsSocketBridge
+    public alephScriptService: AlephScriptService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit() {
     console.log('%c🎮 ThreeJSUI Library - AlephScript Integration v2.0 initializing...', 'color: #ff0099; font-weight: bold; font-size: 14px');
+    console.log('🔄 Loading spinner estado inicial:', this.isLoading);
     
     if (!this.config) {
       throw new Error('ThreeJSUIComponent requires config input');
     }
     
     // Subscribe to connection status
-    this.alephScriptService.connectionStatus
+    this.alephScriptService.getConnectionStatus()
       .pipe(takeUntil(this.destroy$))
-      .subscribe(status => {
+      .subscribe((status: string) => {
         this.connectionStatus = status;
-        console.log('Connection status:', status);
+        console.log('🔌 Connection status cambió a:', status);
+        console.log('🔄 Loading spinner antes del cambio:', this.isLoading);
+        
+        // Ocultar loading si está en modo offline o conectado
+        if (status === 'offline' || status === 'connected') {
+          console.log('✅ Ocultando loading spinner - status:', status);
+          this.isLoading = false;
+          this.cdr.detectChanges(); // Forzar detección de cambios
+          const loadingEl = document.querySelector('.loading-overlay') as HTMLElement;
+          console.log('🔍 DOM loading overlay después de cambio:', loadingEl?.style.display || 'no encontrado');
+        }
+        
+        // Si falla la conexión múltiples veces, habilitar modo offline automáticamente
+        if (status === 'error' && this.alephScriptService.isFallbackMode()) {
+          console.log('⚠️ Error con fallback mode - ocultando loading spinner');
+          this.isLoading = false;
+          this.cdr.detectChanges(); // Forzar detección de cambios
+          const loadingEl = document.querySelector('.loading-overlay') as HTMLElement;
+          console.log('🔍 DOM loading overlay después de error:', loadingEl?.style.display || 'no encontrado');
+        }
+        
+        console.log('🔄 Loading spinner después del cambio:', this.isLoading);
       });
 
-    // Initialize AlephScript connection
-    this.alephScriptService.connect();
+    console.log('📡 AlephScript auto-conectando...');
+    // AlephScript auto-connects, no need to call connect()
   }
 
   ngAfterViewInit() {
+    console.log('🎬 ngAfterViewInit ejecutándose...');
+    console.log('🔄 Loading spinner en AfterViewInit:', this.isLoading);
+    
     // Initialize Three.js scene after view is ready
     setTimeout(() => {
       this.initializeThreeScene();
@@ -120,13 +165,17 @@ export class ThreeJSUIComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private async initializeThreeScene() {
     try {
-      console.log('Initializing Three.js scene...');
+      console.log('🌟 Initializing Three.js scene...');
+      console.log('🔄 Loading spinner antes de Three.js init:', this.isLoading);
       
       // Initialize Three.js scene
       await this.threeSceneService.initialize(this.canvasContainer.nativeElement);
       
       // Start render loop
       this.threeSceneService.startRenderLoop();
+      
+      console.log('✅ Three.js scene inicializada correctamente');
+      console.log('🔄 Loading spinner después de Three.js init:', this.isLoading);
       
       // Subscribe to FPS updates
       this.threeSceneService.fps
@@ -159,6 +208,42 @@ export class ThreeJSUIComponent implements OnInit, OnDestroy, AfterViewInit {
   resetScene() {
     console.log('Resetting scene...');
     this.threeSceneService.reset();
+  }
+
+  // Métodos de conexión
+  connectToAlephScript(): void {
+    console.log('🔌 Intentando conectar a AlephScript...');
+    console.log('🔄 Loading spinner antes de connect:', this.isLoading);
+    
+    if (!this.alephScriptService.isSocketConnected()) {
+      console.log('📡 Iniciando conexión - activando loading spinner');
+      this.isLoading = true;
+      this.alephScriptService.connect();
+    } else {
+      console.log('✅ AlephScript ya está conectado');
+    }
+  }
+
+  disconnectFromAlephScript(): void {
+    console.log('🔌 Desconectando de AlephScript...');
+    this.alephScriptService.disconnect();
+    this.connectionStatus = 'disconnected';
+  }
+
+  toggleOfflineMode(): void {
+    console.log('🔄 Alternando modo offline...');
+    console.log('🔄 Loading spinner antes de toggle offline:', this.isLoading);
+    
+    if (this.alephScriptService.isFallbackMode()) {
+      // Intentar reconectar desde modo offline
+      console.log('📡 Intentando reconectar desde modo offline - activando loading spinner');
+      this.isLoading = true;
+      this.alephScriptService.connect();
+    } else {
+      // Activar modo offline
+      console.log('⚠️ Activando modo offline');
+      this.alephScriptService.enableOfflineMode();
+    }
   }
 
   ngOnDestroy() {
