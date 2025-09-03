@@ -1,0 +1,90 @@
+<div class="message-panel ui-panel">
+  <div class="panel-header">
+    <h3>Message Stream</h3>
+    <div class="message-count">
+      {{ getFilteredCount() }} / {{ messageStats.total }}
+    </div>
+  </div>
+  
+  <!-- Filter Controls -->
+  <div class="filter-controls">
+    <div class="filter-buttons">
+      <button 
+        class="filter-btn"
+        [class.active]="isFilterActive('sys')"
+        (click)="toggleFilter('sys')"
+      >
+        SYS ({{ messageStats.sys }})
+      </button>
+      <button 
+        class="filter-btn"
+        [class.active]="isFilterActive('app')"
+        (click)="toggleFilter('app')"
+      >
+        APP ({{ messageStats.app }})
+      </button>
+      <button 
+        class="filter-btn"
+        [class.active]="isFilterActive('ui')"
+        (click)="toggleFilter('ui')"
+      >
+        UI ({{ messageStats.ui }})
+      </button>
+    </div>
+    
+    <div class="control-buttons">
+      <button class="btn btn-small" (click)="showAllFilters()">All</button>
+      <button class="btn btn-small" (click)="clearAllFilters()">None</button>
+      <button class="btn btn-small btn-danger" (click)="clearMessages()">Clear</button>
+    </div>
+  </div>
+  
+  <!-- Auto-scroll toggle -->
+  <div class="scroll-controls">
+    <label class="checkbox-label">
+      <input 
+        type="checkbox" 
+        [checked]="autoScroll" 
+        (change)="toggleAutoScroll()"
+      />
+      Auto-scroll to bottom
+    </label>
+  </div>
+  
+  <!-- Message List -->
+  <div 
+    class="message-list" 
+    #messageContainer
+    [class.auto-scroll]="autoScroll"
+  >
+    <div 
+      class="message-item"
+      *ngFor="let message of filteredMessages; trackBy: trackMessage"
+      [class]="getChannelClass(message.channel)"
+      (click)="onMessageClick(message)"
+    >
+      <div class="message-header">
+        <span class="message-time">{{ getTimeString(message.timestamp) }}</span>
+        <span class="message-channel">{{ message.channel.toUpperCase() }}</span>
+        <span class="message-type">{{ message.type }}</span>
+      </div>
+      <div class="message-content">{{ message.content }}</div>
+      <div class="message-meta" *ngIf="message.source || message.target">
+        <span *ngIf="message.source" class="message-source">From: {{ message.source }}</span>
+        <span *ngIf="message.target" class="message-target">To: {{ message.target }}</span>
+      </div>
+    </div>
+    
+    <!-- Empty State -->
+    <div class="empty-state" *ngIf="filteredMessages.length === 0 && messageStats.total === 0">
+      <p>No messages yet</p>
+      <small>Waiting for Socket.io messages...</small>
+    </div>
+    
+    <!-- Filtered Empty State -->
+    <div class="empty-state" *ngIf="filteredMessages.length === 0 && messageStats.total > 0">
+      <p>No messages match current filters</p>
+      <small>Try adjusting your channel filters above</small>
+    </div>
+  </div>
+</div>

@@ -21,10 +21,9 @@ export class AlephScriptService {
       
       // Create client
       this.alephClient = (window as any).createAlephScriptClient(
-        'threejs-angular',
-        'threejs-visual-angular', 
-        'http://localhost:3000', // AlephScript server (corrected from ws://localhost:8090)
-        true // debug mode
+        'threejs',
+        'threejs-visual', 
+        'ws://localhost:8090'
       );
 
       // Setup event handlers

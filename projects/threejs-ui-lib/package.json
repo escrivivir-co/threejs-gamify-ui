@@ -1,0 +1,22 @@
+{
+  "name": "@escrivivir/threejs-ui-lib",
+  "version": "1.0.0",
+  "description": "Three.js UI Library with AlephScript integration for State Machine MCP Driver",
+  "keywords": ["angular", "threejs", "ui", "alephscript", "mcp"],
+  "author": "escrivivir-co",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/escrivivir-co/threejs-gamify-ui.git"
+  },
+  "peerDependencies": {
+    "@angular/common": "^20.2.0",
+    "@angular/core": "^20.2.0",
+    "three": "^0.170.0",
+    "rxjs": "^7.8.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  },
+  "sideEffects": false
+}

@@ -25,6 +25,11 @@
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
+    "paths": {
+      "threejs-ui-lib": [
+        "./dist/threejs-ui-lib"
+      ]
+    },
     "esModuleInterop": true
   },
   "include": [
@@ -50,5 +55,13 @@
     "strictInjectionParameters": true,
     "strictInputAccessModifiers": true,
     "strictTemplates": true
-  }
+  },
+  "references": [
+    {
+      "path": "./projects/threejs-ui-lib/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/threejs-ui-lib/tsconfig.spec.json"
+    }
+  ]
 }
