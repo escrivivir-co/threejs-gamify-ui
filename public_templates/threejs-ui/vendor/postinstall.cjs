@@ -29,21 +29,21 @@ function copyDirectory(src, dest) {
 function main() {
   // We're being installed as a dependency
   const packageRoot = __dirname;
-  // Copy from the compiled Angular app directory (now using dist/public which has the updated files)
-  const sourceAngularDir = path.join(packageRoot, '..', 'dist', 'public');
-  // Also copy static assets that Angular app needs (same directory now)
+  // Copy from the compiled Angular app directory
+  const sourceAngularDir = path.join(packageRoot, '..', 'dist', 'threegamification-ui');
+  // Also copy static assets that Angular app needs
   const sourceAssetsDir = path.join(packageRoot, '..', 'dist', 'public');
-
+  
   // Find the project root (where package.json is)
   let projectRoot = packageRoot;
   let depth = 0;
   while (depth < 10) {
     const parentDir = path.dirname(projectRoot);
     if (parentDir === projectRoot) break; // reached filesystem root
-
+    
     projectRoot = parentDir;
     depth++;
-
+    
     // Check if we're in node_modules and find the project root
     if (projectRoot.includes('node_modules')) {
       // Go up to find the actual project root
@@ -54,52 +54,72 @@ function main() {
         break;
       }
     }
-
+    
     // Check if we found a project root
-    if (fs.existsSync(path.join(projectRoot, 'package.json')) &&
+    if (fs.existsSync(path.join(projectRoot, 'package.json')) && 
         !projectRoot.includes('node_modules')) {
       break;
     }
   }
-
-  // Install into project-level public_templates so runtime can serve templates from there       
+  
+  // Install into project-level public_templates so runtime can serve templates from there
   const targetDir = path.join(projectRoot, 'public_templates', 'threejs-ui');
-
+  
   // Check if sources exist
   const angularExists = fs.existsSync(sourceAngularDir);
   const assetsExists = fs.existsSync(sourceAssetsDir);
-
+  
   if (!angularExists && !assetsExists) {
     console.log('âš ï¸  ThreeJS UI assets not found in package, skipping copy');
     return;
   }
-
-  console.log('í³¦ Installing ThreeJS UI application and assets...');
-  console.log(`   Angular App: ${sourceAngularDir} (${angularExists ? 'found' : 'missing'})`);   
-  console.log(`   Static Assets: ${sourceAssetsDir} (${assetsExists ? 'found' : 'missing'})`);   
+  
+  console.log('ðŸ“¦ Installing ThreeJS UI application and assets...');
+  console.log(`   Angular App: ${sourceAngularDir} (${angularExists ? 'found' : 'missing'})`);
+  console.log(`   Static Assets: ${sourceAssetsDir} (${assetsExists ? 'found' : 'missing'})`);
   console.log(`   Target: ${targetDir}`);
-
+  
   try {
     // Remove existing directory
     if (fs.existsSync(targetDir)) {
       fs.rmSync(targetDir, { recursive: true, force: true });
     }
-
+    
     // Create target directory
     fs.mkdirSync(targetDir, { recursive: true });
-
-    // Copy Angular application (main app files) - now directly from dist/public
+    
+    // Copy Angular application (main app files)
     if (angularExists) {
       copyDirectory(sourceAngularDir, targetDir);
-      console.log('âœ… Angular application copied from dist/public');
+      console.log('âœ… Angular application copied');
     }
-
-    // Since both sourceAngularDir and sourceAssetsDir point to the same location now,
-    // we don't need to copy assets separately as they're already included above
-
+    
+    // Copy static assets (merge with Angular app, but preserve Angular index.html)
+    if (assetsExists) {
+      // Copy each subdirectory from assets, but skip index.html to preserve Angular version
+      const assetsEntries = fs.readdirSync(sourceAssetsDir, { withFileTypes: true });
+      for (const entry of assetsEntries) {
+        if (entry.name === 'index.html') {
+          console.log('âš ï¸  Skipping index.html from static assets to preserve Angular version');
+          continue;
+        }
+        
+        const srcPath = path.join(sourceAssetsDir, entry.name);
+        const destPath = path.join(targetDir, entry.name);
+        
+        if (entry.isDirectory()) {
+          copyDirectory(srcPath, destPath);
+        } else {
+          fs.copyFileSync(srcPath, destPath);
+        }
+      }
+      console.log('âœ… Static assets copied (Angular index.html preserved)');
+    }
+    
   console.log('âœ… ThreeJS UI application and assets installed successfully!');
-  console.log(`í³ Application available at: ${targetDir}`);
-  console.log('í¾® You can now use provideTemplate: true (served from public_templates/threejs-ui) in your ThreeJS UI configuration');                                                             
+  console.log(`ðŸ“ Application available at: ${targetDir}`);
+  console.log('ðŸŽ® You can now use provideTemplate: true (served from public_templates/threejs-ui) in your ThreeJS UI configuration');
+    
   } catch (error) {
     console.error('âŒ Error installing ThreeJS UI application:', error.message);
     // Don't fail the install if asset copy fails
@@ -111,3 +131,5 @@ function main() {
 if (require.main === module) {
   main();
 }
+
+module.exports = { main };

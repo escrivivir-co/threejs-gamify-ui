@@ -15,6 +15,7 @@
   },
   "scripts": {
     "dev": "tsx server/index.ts",
+    "serve": "ng serve",
     "build": "ng build",
     "build:package": "npm run build && npm pack",
     "pack": "npm pack",
