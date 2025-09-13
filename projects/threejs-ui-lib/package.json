@@ -13,7 +13,9 @@
     "@angular/common": "^20.2.0",
     "@angular/core": "^20.2.0",
     "three": "^0.170.0",
-    "rxjs": "^7.8.0"
+    "rxjs": "^7.8.0",
+    "@alephscript/core-browser": "^1.0.0",
+    "@alephscript/angular": "^1.0.0"
   },
   "dependencies": {
     "tslib": "^2.3.0"

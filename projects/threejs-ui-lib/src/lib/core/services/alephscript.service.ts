@@ -1,6 +1,7 @@
 import { Injectable, Inject, PLATFORM_ID } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
-import { BehaviorSubject, Observable, Subject } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, map } from 'rxjs';
+import { AlephScriptService as CoreAlephScriptService, AlephMessage } from '@alephscript/angular';
 
 export interface AlephScriptConfig {
   serverUrl: string;
@@ -24,17 +25,10 @@ export interface AlephScriptMessage {
   providedIn: 'root'
 })
 export class AlephScriptService {
-  private socket: any = null;
-  private isConnected = false;
   private fallbackModeEnabled = false;
-  private connectionAttempts = 0;
-  private maxConnectionAttempts = 3;
-  private connectionTimeout: any = null;
-
-  // Observables
-  private connectionStatus$ = new BehaviorSubject<string>('disconnected');
-  private messages$ = new Subject<AlephScriptMessage>();
-  private eventSubject$ = new Subject<any>();
+  private fallbackConnectionStatus$ = new BehaviorSubject<string>('disconnected');
+  private fallbackMessages$ = new Subject<AlephScriptMessage>();
+  private fallbackEvents$ = new Subject<any>();
 
   // Default configuration
   private config: AlephScriptConfig = {
@@ -44,37 +38,53 @@ export class AlephScriptService {
     fallbackMode: true
   };
 
-  constructor(@Inject(PLATFORM_ID) private platformId: Object) {
-    console.log('🔗 AlephScriptService initialized - Native implementation');
-    console.log('🔌 Status inicial - isConnected:', this.isConnected);
-    
-    if (isPlatformBrowser(this.platformId)) {
-      console.log('🌐 Ejecutando en browser - intentando auto-conexión');
-      this.startConnectionWithTimeout();
-    } else {
-      console.log('🖥️ Ejecutando en servidor - saltando conexión');
-    }
+  constructor(
+    @Inject(PLATFORM_ID) private platformId: Object,
+    private coreAlephScript: CoreAlephScriptService
+  ) {
+    console.log('🔗 AlephScriptService initialized - Using new @alephscript/angular implementation');
+    console.log('🔌 Status inicial - isConnected:', this.connected());
   }
 
   /**
-   * Get connection status observable
+   * Get connection status as observable
    */
   getConnectionStatus(): Observable<string> {
-    return this.connectionStatus$.asObservable();
+    if (this.fallbackModeEnabled) {
+      return this.fallbackConnectionStatus$.asObservable();
+    }
+    return this.coreAlephScript.connectionStatus;
   }
 
   /**
-   * Get messages observable
+   * Get messages as observable
    */
   getMessages(): Observable<AlephScriptMessage> {
-    return this.messages$.asObservable();
+    if (this.fallbackModeEnabled) {
+      return this.fallbackMessages$.asObservable();
+    }
+    
+    // Transform AlephMessage to AlephScriptMessage for backward compatibility
+    return this.coreAlephScript.messages.pipe(
+      map((msg: AlephMessage) => ({
+        id: msg.id,
+        type: msg.type,
+        data: msg.data,
+        timestamp: msg.timestamp || Date.now(),
+        source: msg.source,
+        target: msg.target
+      }))
+    );
   }
 
   /**
-   * Get events observable
+   * Get events as observable
    */
   getEvents(): Observable<any> {
-    return this.eventSubject$.asObservable();
+    if (this.fallbackModeEnabled) {
+      return this.fallbackEvents$.asObservable();
+    }
+    return this.coreAlephScript.systemMessages;
   }
 
   /**
@@ -83,20 +93,27 @@ export class AlephScriptService {
   configure(config: Partial<AlephScriptConfig>): void {
     this.config = { ...this.config, ...config };
     console.log('⚙️ AlephScript configurado:', this.config);
+    
+    if (!this.fallbackModeEnabled) {
+      // No need for separate configure call - the core service handles configuration internally
+    }
   }
 
   /**
    * Check if connected
    */
   connected(): boolean {
-    return this.isConnected;
+    if (this.fallbackModeEnabled) {
+      return this.fallbackConnectionStatus$.value === 'connected';
+    }
+    return this.coreAlephScript.isConnected();
   }
 
   /**
    * Check if socket is connected
    */
   isSocketConnected(): boolean {
-    return this.isConnected && !this.fallbackModeEnabled;
+    return this.connected() && !this.fallbackModeEnabled;
   }
 
   /**
@@ -107,212 +124,72 @@ export class AlephScriptService {
   }
 
   /**
-   * Connect to AlephScript server
+   * Connect to server
    */
-  async connect(config?: AlephScriptConfig): Promise<void> {
-    if (config) {
-      this.configure(config);
+  connect(): void {
+    if (this.fallbackModeEnabled) {
+      console.log('🔄 Attempting reconnection from fallback mode...');
+      this.fallbackModeEnabled = false;
+      this.fallbackConnectionStatus$.next('connecting');
     }
 
-    console.log('📡 Intentando conectar a:', this.config.serverUrl);
-    this.connectionStatus$.next('connecting');
-
     if (!isPlatformBrowser(this.platformId)) {
-      console.warn('⚠️ No es entorno browser, activando fallback mode');
-      this.enableFallbackMode();
+      console.log('🚫 Not in browser environment, enabling fallback mode');
+      this.enableOfflineMode();
       return;
     }
 
     try {
-      // Dynamically import socket.io-client
-      const { io } = await import('socket.io-client');
+      // Simply call connect on the core service
+      this.coreAlephScript.connect();
       
-      this.socket = io(this.config.serverUrl, {
-        transports: ['websocket', 'polling'],
-        timeout: this.config.timeout,
-        forceNew: true
-      });
-
-      this.setupEventHandlers();
-
     } catch (error) {
-      console.error('❌ Error al conectar:', error);
+      console.error('❌ Connection failed:', error);
       this.handleConnectionError();
     }
-  }
-
-  /**
-   * Reconnect to server
-   */
-  reconnect(): void {
-    console.log('🔄 Reconnecting...');
-    this.disconnect();
-    this.connect();
   }
 
   /**
    * Disconnect from server
    */
   disconnect(): void {
-    console.log('🔌 Desconectando...');
+    console.log('🔌 Disconnecting from AlephScript server...');
     
-    if (this.connectionTimeout) {
-      clearTimeout(this.connectionTimeout);
-      this.connectionTimeout = null;
+    if (!this.fallbackModeEnabled) {
+      this.coreAlephScript.disconnect();
     }
-
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
+    
+    if (this.fallbackModeEnabled) {
+      this.fallbackConnectionStatus$.next('disconnected');
     }
-
-    this.isConnected = false;
-    this.fallbackModeEnabled = false;
-    this.connectionAttempts = 0;
-    this.connectionStatus$.next('disconnected');
   }
 
   /**
-   * Enable offline/fallback mode
+   * Enable offline mode
    */
   enableOfflineMode(): void {
-    this.enableFallbackMode();
+    console.log('📴 Enabling offline mode...');
+    this.fallbackModeEnabled = true;
+    this.fallbackConnectionStatus$.next('offline');
   }
 
   /**
-   * Send message to server
+   * Send message
    */
   sendMessage(type: string, data: any): void {
-    if (this.isConnected && this.socket) {
-      const message = {
-        id: this.generateId(),
-        type,
-        data,
-        timestamp: Date.now()
-      };
-      
-      console.log('📤 Enviando mensaje:', message);
-      this.socket.emit('aleph_message', message);
-    } else {
-      console.warn('⚠️ No conectado - mensaje no enviado:', { type, data });
+    if (this.fallbackModeEnabled) {
+      console.log('📴 Offline mode - message not sent:', { type, data });
+      return;
     }
-  }
 
-  /**
-   * Send user action
-   */
-  sendUserAction(action: string, data: any): void {
-    this.sendMessage('user_action', { action, ...data });
-  }
-
-  /**
-   * Subscribe to events (compatibility method)
-   */
-  on(eventType: string, callback: (data: any) => void): void {
-    if (eventType === 'message') {
-      this.messages$.subscribe(callback);
-    } else {
-      this.eventSubject$.subscribe((event) => {
-        if (event.type === eventType) {
-          callback(event.data);
-        }
-      });
-    }
-  }
-
-  /**
-   * Start connection with timeout
-   */
-  private startConnectionWithTimeout(): void {
-    console.log('⏱️ Iniciando conexión con timeout de', this.config.timeout, 'ms');
-    
-    this.connectionTimeout = setTimeout(() => {
-      console.log('⏰ Timeout alcanzado, activando fallback mode');
-      if (!this.isConnected && this.config.fallbackMode) {
-        this.enableFallbackMode();
-      }
-    }, this.config.timeout);
-
-    this.connect().catch((error) => {
-      console.error('❌ Error en conexión inicial:', error);
+    try {
+      // Use the core service's sendMessage directly
+      this.coreAlephScript.sendMessage(type, data);
+      console.log('📤 Message sent:', { type, data });
+      
+    } catch (error) {
+      console.error('❌ Failed to send message:', error);
       this.handleConnectionError();
-    });
-  }
-
-  /**
-   * Setup socket event handlers
-   */
-  private setupEventHandlers(): void {
-    if (!this.socket) return;
-
-    this.socket.on('connect', () => {
-      console.log('✅ Conectado a AlephScript server');
-      this.isConnected = true;
-      this.fallbackModeEnabled = false;
-      this.connectionAttempts = 0;
-      
-      if (this.connectionTimeout) {
-        clearTimeout(this.connectionTimeout);
-        this.connectionTimeout = null;
-      }
-      
-      this.connectionStatus$.next('connected');
-      this.eventSubject$.next({ type: 'connected', data: {} });
-    });
-
-    this.socket.on('disconnect', () => {
-      console.log('🔌 Desconectado de AlephScript server');
-      this.isConnected = false;
-      this.connectionStatus$.next('disconnected');
-      this.eventSubject$.next({ type: 'disconnected', data: {} });
-    });
-
-    this.socket.on('connect_error', (error: any) => {
-      console.error('❌ Error de conexión:', error.message);
-      this.handleConnectionError();
-    });
-
-    // Handle incoming messages
-    this.socket.on('aleph_message', (data: any) => {
-      const message: AlephScriptMessage = {
-        id: data.id || this.generateId(),
-        type: data.type || 'generic',
-        data: data.data || data,
-        timestamp: Date.now(),
-        source: data.source,
-        target: data.target
-      };
-      
-      this.messages$.next(message);
-      this.eventSubject$.next({ type: 'message', data: message });
-      
-      if (this.config.debug) {
-        console.log('📨 Mensaje recibido:', message);
-      }
-    });
-
-    // Handle bot-specific events
-    this.socket.on('bot_status', (data: any) => this.handleBotEvent('bot_status', data));
-    this.socket.on('bot_response', (data: any) => this.handleBotEvent('bot_response', data));
-    this.socket.on('system_event', (data: any) => this.handleBotEvent('system_event', data));
-  }
-
-  /**
-   * Handle bot events
-   */
-  private handleBotEvent(type: string, data: any): void {
-    const message: AlephScriptMessage = {
-      id: this.generateId(),
-      type,
-      data,
-      timestamp: Date.now()
-    };
-    
-    this.messages$.next(message);
-    this.eventSubject$.next({ type, data: message });
-    
-    if (this.config.debug) {
-      console.log(`🤖 Bot ${type}:`, data);
     }
   }
 
@@ -320,57 +197,18 @@ export class AlephScriptService {
    * Handle connection errors
    */
   private handleConnectionError(): void {
-    this.connectionAttempts++;
-    console.warn(`⚠️ Intento de conexión ${this.connectionAttempts}/${this.maxConnectionAttempts} falló`);
+    console.log('⚠️ Connection error detected');
     
-    if (this.connectionAttempts >= this.maxConnectionAttempts) {
-      console.log('❌ Máximo de intentos alcanzado, activando fallback mode');
-      this.enableFallbackMode();
-    } else {
-      this.connectionStatus$.next('error');
-      this.eventSubject$.next({ 
-        type: 'connection_error', 
-        data: { attempts: this.connectionAttempts } 
-      });
+    if (this.config.fallbackMode) {
+      console.log('🔄 Enabling fallback mode due to connection error');
+      this.enableOfflineMode();
     }
-  }
-
-  /**
-   * Enable fallback mode
-   */
-  private enableFallbackMode(): void {
-    console.log('⚠️ Activando modo offline/fallback');
-    this.fallbackModeEnabled = true;
-    this.isConnected = false;
-    
-    if (this.connectionTimeout) {
-      clearTimeout(this.connectionTimeout);
-      this.connectionTimeout = null;
-    }
-    
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
-    }
-    
-    this.connectionStatus$.next('offline');
-    this.eventSubject$.next({ type: 'fallback_mode', data: {} });
   }
 
   /**
    * Generate unique ID
    */
   private generateId(): string {
-    return Math.random().toString(36).substr(2, 9);
-  }
-
-  /**
-   * Cleanup on destroy
-   */
-  ngOnDestroy(): void {
-    this.disconnect();
-    this.connectionStatus$.complete();
-    this.messages$.complete();
-    this.eventSubject$.complete();
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
   }
 }

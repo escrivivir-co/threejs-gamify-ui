@@ -144,7 +144,8 @@ export class AlephScriptTestComponent implements OnInit, OnDestroy {
   }
   
   private setupEventListeners(): void {
-    this.alephScript.on('message', (data: any) => {
+    // Subscribe to messages using the new reactive API
+    this.alephScript.getMessages().subscribe((data: any) => {
       console.log('📨 Received message in test component:', data);
       this.debugInfo.lastMessage = {
         data: data,
@@ -152,7 +153,8 @@ export class AlephScriptTestComponent implements OnInit, OnDestroy {
       };
     });
     
-    this.alephScript.on('ui:notification', (data: any) => {
+    // Subscribe to events (system messages) using the new reactive API
+    this.alephScript.getEvents().subscribe((data: any) => {
       console.log('🔔 UI Notification:', data);
       this.debugInfo.lastNotification = data;
     });
@@ -166,7 +168,7 @@ export class AlephScriptTestComponent implements OnInit, OnDestroy {
       component: 'AlephScriptTestComponent'
     };
     
-    this.alephScript.sendUserAction('ui:test', testMessage);
+    this.alephScript.sendMessage('ui:test', testMessage);
     console.log('📤 Sent test message:', testMessage);
     
     this.debugInfo.lastSentMessage = testMessage;

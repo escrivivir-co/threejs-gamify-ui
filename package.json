@@ -23,6 +23,8 @@
     "devapp": "ng serve dev-app"
   },
   "dependencies": {
+    "@alephscript/angular": "file:../aleph-script-angular/alephscript-angular-1.0.0.tgz",
+    "@alephscript/core-browser": "file:../aleph-script-core-browser/alephscript-core-browser-1.0.0.tgz",
     "@angular-devkit/build-angular": "^20.2.1",
     "@angular/animations": "^20.2.3",
     "@angular/cli": "^20.2.1",
