@@ -34,6 +34,30 @@ export class AlephScriptService {
       "🔗 AlephScriptService initialized - Using new @alephscript/angular implementation"
     );
     console.log("🔌 Status inicial - isConnected:", this.connected());
+    
+    // 🔍 DEBUG: Inspect available properties
+    console.log("🔍 [DEBUG] CoreAlephScript properties:", Object.keys(this.coreAlephScript));
+    console.log("🔍 [DEBUG] CoreAlephScript messages:", this.coreAlephScript.messages);
+    console.log("🔍 [DEBUG] CoreAlephScript systemMessages:", this.coreAlephScript.systemMessages);
+    
+    // 🔍 DEBUG: Test subscriptions to see what's available
+    this.debugSubscriptions();
+  }
+
+  private debugSubscriptions() {
+    console.log("🔍 [DEBUG] Setting up debug subscriptions...");
+    
+    // Test messages observable
+    this.coreAlephScript.messages.subscribe(
+      (msg: any) => console.log("🔥 [DEBUG] Message received:", msg),
+      (err: any) => console.error("❌ [DEBUG] Message error:", err)
+    );
+    
+    // Test systemMessages observable
+    this.coreAlephScript.systemMessages.subscribe(
+      (event: any) => console.log("🔥 [DEBUG] SystemMessage received:", event),
+      (err: any) => console.error("❌ [DEBUG] SystemMessage error:", err)
+    );
   }
 
   /**
@@ -56,14 +80,17 @@ export class AlephScriptService {
 
     // Transform AlephMessage to AlephScriptMessage for backward compatibility
     return this.coreAlephScript.messages.pipe(
-      map((msg: AlephMessage) => ({
-        id: msg.id,
-        type: msg.type,
-        data: msg.data,
-        timestamp: msg.timestamp || Date.now(),
-        source: msg.source,
-        target: msg.target,
-      }))
+      map((msg: AlephMessage) => {
+        console.log('📨 [ALEPH-SERVICE] Processing message:', msg);
+        return {
+          id: msg.id,
+          type: msg.type,
+          data: msg.data,
+          timestamp: msg.timestamp || Date.now(),
+          source: msg.source,
+          target: msg.target,
+        };
+      })
     );
   }
 
@@ -74,7 +101,44 @@ export class AlephScriptService {
     if (this.fallbackModeEnabled) {
       return this.fallbackEvents$.asObservable();
     }
-    return this.coreAlephScript.systemMessages;
+    
+    console.log('🎯 [ALEPH-SERVICE] Setting up events observable...');
+    console.log('🎯 [ALEPH-SERVICE] Available observables:', {
+      messages: !!this.coreAlephScript.messages,
+      systemMessages: !!this.coreAlephScript.systemMessages,
+      connectionStatus: !!this.coreAlephScript.connectionStatus
+    });
+    
+    return this.coreAlephScript.systemMessages.pipe(
+      map((event: any) => {
+        console.log('🔥 [ALEPH-SERVICE] Processing system event:', event);
+        return event;
+      })
+    );
+  }
+
+  /**
+   * Get room events directly - alternative approach
+   */
+  getRoomEvents(): Observable<any> {
+    console.log('🏠 [ALEPH-SERVICE] Setting up room events observable...');
+    
+    // Try to access the underlying socket client
+    const socketClient = (this.coreAlephScript as any).socketClient;
+    console.log('🔍 [ALEPH-SERVICE] Socket client:', socketClient);
+    
+    if (socketClient && socketClient.events$) {
+      console.log('✅ [ALEPH-SERVICE] Found socket events$');
+      return socketClient.events$.pipe(
+        map((event: any) => {
+          console.log('🏠 [ALEPH-SERVICE] Processing room event:', event);
+          return event;
+        })
+      );
+    } else {
+      console.warn('⚠️ [ALEPH-SERVICE] No socket events$ found');
+      return new Subject<any>().asObservable();
+    }
   }
 
   /**

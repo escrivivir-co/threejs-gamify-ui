@@ -238,15 +238,38 @@ export class ThreeJSScenePureComponent implements OnInit, OnDestroy, AfterViewIn
   }
 
   private initializeAnimationSystems(): void {
-    console.log('🎬 Initializing animation systems...');
+    console.log('🎬 [SCENE] Initializing animation systems...');
     
     // Subscribe to AlephScript messages for animations
+    console.log('📨 [SCENE] Setting up messages subscription...');
     this.alephScriptService.getMessages()
       .pipe(takeUntil(this.destroy$))
       .subscribe((message: any) => {
-        console.log('📨 Received AlephScript message for animation:', message);
+        console.log('📨 [SCENE] Received AlephScript MESSAGE for animation:', message);
         this.handleAlephScriptMessage(message);
       });
+
+    // 🚀 NUEVO: Subscribe to AlephScript events (including room events)
+    console.log('🎯 [SCENE] Setting up events subscription...');
+    this.alephScriptService.getEvents()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((event: any) => {
+        console.log('🔥 [SCENE] Received AlephScript EVENT for animation:', event);
+        this.handleAlephScriptEvent(event);
+      });
+
+    // 🏠 ALTERNATIVO: Try room events directly
+    console.log('🏠 [SCENE] Setting up room events subscription...');
+    if (typeof this.alephScriptService.getRoomEvents === 'function') {
+      this.alephScriptService.getRoomEvents()
+        .pipe(takeUntil(this.destroy$))
+        .subscribe((roomEvent: any) => {
+          console.log('🏠 [SCENE] Received ROOM EVENT for animation:', roomEvent);
+          this.handleAlephScriptEvent(roomEvent);
+        });
+    } else {
+      console.warn('⚠️ [SCENE] getRoomEvents not available');
+    }
   }
 
   private initializeDemoSimulation(): void {
@@ -278,6 +301,37 @@ export class ThreeJSScenePureComponent implements OnInit, OnDestroy, AfterViewIn
     }
   }
 
+  private handleAlephScriptEvent(event: any): void {
+    console.log('🔥 [SCENE] Processing AlephScript EVENT:', event);
+    console.log('🔍 [SCENE] Event type:', typeof event);
+    console.log('🔍 [SCENE] Event is array:', Array.isArray(event));
+    
+    // Check if event contains room message data
+    if (event && Array.isArray(event) && event.length > 0) {
+      console.log('📦 [SCENE] Processing array event with', event.length, 'items');
+      // Extract message from room event array
+      const eventData = event[0];
+      console.log('📦 [SCENE] Extracted event data:', eventData);
+      console.log('🔍 [SCENE] EventData has data property:', 'data' in eventData);
+      
+      if (eventData && eventData.data) {
+        console.log('✨ [SCENE] Found message data in event, processing...');
+        console.log('💾 [SCENE] Message data content:', eventData.data);
+        this.createMessageVisualization(eventData.data);
+      } else {
+        console.warn('⚠️ [SCENE] Event data does not contain data property:', eventData);
+      }
+    } else if (event && event.data) {
+      // Direct event with data
+      console.log('✨ [SCENE] Processing direct event data...');
+      console.log('💾 [SCENE] Direct event data:', event.data);
+      this.createMessageVisualization(event.data);
+    } else {
+      console.warn('⚠️ [SCENE] Event format not recognized:', event);
+      console.log('🔍 [SCENE] Event keys:', Object.keys(event || {}));
+    }
+  }
+
   private handleDemoMessage(message: any): void {
     console.log('🎭 Processing demo message:', message);
     
@@ -295,22 +349,60 @@ export class ThreeJSScenePureComponent implements OnInit, OnDestroy, AfterViewIn
   }
 
   private createMessageVisualization(message: any): void {
-    console.log('✨ Creating message visualization for:', message);
+    console.log('✨ [SCENE] Creating message visualization for:', message);
+    console.log('🔍 [SCENE] Message keys:', Object.keys(message || {}));
+    console.log('🔍 [SCENE] Message properties:', {
+      id: message?.id,
+      fromBot: message?.fromBot,
+      toBot: message?.toBot,
+      channel: message?.channel,
+      type: message?.type
+    });
+    
+    // Validate required fields
+    if (!message.fromBot || !message.toBot) {
+      console.error('❌ [SCENE] Missing required fields fromBot/toBot:', message);
+      return;
+    }
+    
+    // Auto-detect message type if not specified
+    if (!message.type) {
+      if (message.fromBot === 'CentralHub') {
+        message.type = 'center-to-bot';
+      } else if (message.toBot === 'CentralHub') {
+        message.type = 'bot-to-center';  
+      } else {
+        message.type = 'bot-to-bot';
+      }
+      console.log('🔍 [SCENE] Auto-detected message type:', message.type);
+    } else {
+      console.log('✅ [SCENE] Message type provided:', message.type);
+    }
     
     // Get bot positions based on message type
     let startPosition: THREE.Vector3;
     let endPosition: THREE.Vector3;
     
+    console.log('🎯 [SCENE] Determining positions for type:', message.type);
+    
     if (message.type === 'bot-to-center') {
       // From bot to center
       startPosition = this.getBotPosition(message.fromBot);
       endPosition = new THREE.Vector3(0, 1, 0); // Center hub
+      console.log('📍 [SCENE] Bot-to-center route:', message.fromBot, '→ CentralHub');
     } else if (message.type === 'center-to-bot') {
       // From center to bot
       startPosition = new THREE.Vector3(0, 1, 0); // Center hub
       endPosition = this.getBotPosition(message.toBot);
+      console.log('📍 [SCENE] Center-to-bot route: CentralHub →', message.toBot);
+    } else if (message.type === 'bot-to-bot') {
+      // Bot to bot direct
+      startPosition = this.getBotPosition(message.fromBot);
+      endPosition = this.getBotPosition(message.toBot);
+      console.log('📍 [SCENE] Bot-to-bot route:', message.fromBot, '→', message.toBot);
     } else {
-      // Random positions for demo
+      // Random positions for demo or unknown types
+      console.log('📍 [SCENE] Using random positions for unknown type:', message.type);
       startPosition = new THREE.Vector3(
         (Math.random() - 0.5) * 8, 
         Math.random() * 2 + 1, 
@@ -323,10 +415,15 @@ export class ThreeJSScenePureComponent implements OnInit, OnDestroy, AfterViewIn
       );
     }
     
+    console.log('📍 [SCENE] Calculated positions:', {
+      start: { x: startPosition.x, y: startPosition.y, z: startPosition.z },
+      end: { x: endPosition.x, y: endPosition.y, z: endPosition.z }
+    });
+    
     // Create unique ID for particle
     const particleId = `particle_${message.id || Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     
-    console.log(`🚀 Creating particle ${particleId} from`, startPosition, 'to', endPosition, 'channel:', message.channel);
+    console.log(`🚀 [SCENE] Creating particle ${particleId} with channel:`, message.channel);
     
     // Create the animated particle
     const particle = this.trajectoryManager.createMessageParticle(
@@ -338,13 +435,19 @@ export class ThreeJSScenePureComponent implements OnInit, OnDestroy, AfterViewIn
     );
     
     if (particle) {
-      console.log(`✅ Particle ${particleId} created successfully`);
+      console.log(`✅ [SCENE] Particle ${particleId} created successfully`);
     } else {
-      console.warn(`⚠️ Failed to create particle ${particleId}`);
+      console.error(`❌ [SCENE] Failed to create particle ${particleId}`);
+      console.log('🔍 [SCENE] TrajectoryManager state:', {
+        hasScene: !!this.trajectoryManager['scene'],
+        hasGeometry: !!this.trajectoryManager['particleGeometry']
+      });
     }
   }
 
   private getBotPosition(botName: string): THREE.Vector3 {
+    console.log('🤖 [SCENE] Getting position for bot:', botName);
+    
     // Predefined bot positions in a circle around the center
     const botPositions = [
       new THREE.Vector3(4, 1, 0),    // East
@@ -363,7 +466,14 @@ export class ThreeJSScenePureComponent implements OnInit, OnDestroy, AfterViewIn
       hash += botName.charCodeAt(i);
     }
     
-    return botPositions[hash % botPositions.length];
+    const selectedPosition = botPositions[hash % botPositions.length];
+    console.log(`🤖 [SCENE] Bot ${botName} positioned at:`, {
+      x: selectedPosition.x,
+      y: selectedPosition.y, 
+      z: selectedPosition.z
+    });
+    
+    return selectedPosition;
   }
 
   private getMessageColor(channel: string): number {
