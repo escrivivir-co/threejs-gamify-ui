@@ -113,50 +113,40 @@ export class ThreeJSUIComponent implements OnInit, OnDestroy, AfterViewInit {
   ) {}
 
   ngOnInit() {
-    console.log('%c🎮 ThreeJSUI Library - AlephScript Integration v2.0 initializing...', 'color: #ff0099; font-weight: bold; font-size: 14px');
-    console.log('🔄 Loading spinner estado inicial:', this.isLoading);
+    console.log('🎮 ThreeJSUI Library - AlephScript Integration v2.0 initializing...');
     
     if (!this.config) {
       throw new Error('ThreeJSUIComponent requires config input');
     }
     
-    // Subscribe to connection status
+    // Subscribe to connection status with delay to avoid change detection issues
     this.alephScriptService.getConnectionStatus()
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        takeUntil(this.destroy$)
+      )
       .subscribe((status: string) => {
         this.connectionStatus = status;
-        console.log('🔌 Connection status cambió a:', status);
-        console.log('🔄 Loading spinner antes del cambio:', this.isLoading);
         
-        // Ocultar loading si está en modo offline o conectado
+        // Update loading state based on connection status
         if (status === 'offline' || status === 'connected') {
-          console.log('✅ Ocultando loading spinner - status:', status);
           this.isLoading = false;
-          this.cdr.detectChanges(); // Forzar detección de cambios
-          const loadingEl = document.querySelector('.loading-overlay') as HTMLElement;
-          console.log('🔍 DOM loading overlay después de cambio:', loadingEl?.style.display || 'no encontrado');
         }
         
-        // Si falla la conexión múltiples veces, habilitar modo offline automáticamente
+        // Handle fallback mode
         if (status === 'error' && this.alephScriptService.isFallbackMode()) {
-          console.log('⚠️ Error con fallback mode - ocultando loading spinner');
           this.isLoading = false;
-          this.cdr.detectChanges(); // Forzar detección de cambios
-          const loadingEl = document.querySelector('.loading-overlay') as HTMLElement;
-          console.log('🔍 DOM loading overlay después de error:', loadingEl?.style.display || 'no encontrado');
         }
         
-        console.log('🔄 Loading spinner después del cambio:', this.isLoading);
+        // Use setTimeout to defer change detection to next tick
+        setTimeout(() => {
+          this.cdr.detectChanges();
+        }, 0);
       });
 
-    console.log('📡 AlephScript auto-conectando...');
     // AlephScript auto-connects, no need to call connect()
   }
 
   ngAfterViewInit() {
-    console.log('🎬 ngAfterViewInit ejecutándose...');
-    console.log('🔄 Loading spinner en AfterViewInit:', this.isLoading);
-    
     // Initialize Three.js scene after view is ready
     setTimeout(() => {
       this.initializeThreeScene();
@@ -174,8 +164,7 @@ export class ThreeJSUIComponent implements OnInit, OnDestroy, AfterViewInit {
       // Start render loop
       this.threeSceneService.startRenderLoop();
       
-      console.log('✅ Three.js scene inicializada correctamente');
-      console.log('🔄 Loading spinner después de Three.js init:', this.isLoading);
+      console.log('✅ Three.js scene initialized successfully');
       
       // Subscribe to FPS updates
       this.threeSceneService.fps
@@ -186,8 +175,6 @@ export class ThreeJSUIComponent implements OnInit, OnDestroy, AfterViewInit {
 
       // Mark as loaded
       this.isLoading = false;
-      
-      console.log('Three.js scene initialized successfully');
       
     } catch (error) {
       console.error('Failed to initialize Three.js scene:', error);

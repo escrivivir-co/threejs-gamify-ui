@@ -1,7 +1,7 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AlephScriptService } from '../../core/services/alephscript.service';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, takeUntil, delay } from 'rxjs';
 
 @Component({
   selector: 'app-alephscript-test',
@@ -111,12 +111,18 @@ export class AlephScriptTestComponent implements OnInit, OnDestroy {
   isConnected = false;
   debugInfo: any = {};
   
-  constructor(private alephScript: AlephScriptService) {}
+  constructor(
+    private alephScript: AlephScriptService,
+    private cdr: ChangeDetectorRef
+  ) {}
   
   ngOnInit(): void {
-    // Subscribe to connection status
+    // Subscribe to connection status with delay to avoid ExpressionChangedAfterItHasBeenCheckedError
     this.alephScript.getConnectionStatus()
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        delay(0), // Defer to next tick
+        takeUntil(this.destroy$)
+      )
       .subscribe((status: string) => {
         this.connectionStatus = this.formatStatus(status);
         this.statusClass = this.getStatusClass(status);
@@ -132,11 +138,14 @@ export class AlephScriptTestComponent implements OnInit, OnDestroy {
         if (this.isConnected) {
           this.setupEventListeners();
         }
+        
+        // Trigger change detection manually
+        this.cdr.detectChanges();
       });
     
     // Configure AlephScript
     this.alephScript.configure({
-      serverUrl: 'http://localhost:3000',
+      url: 'http://localhost:3000',
       uiType: 'test-component',
       uiId: 'angular-test',
       debug: true

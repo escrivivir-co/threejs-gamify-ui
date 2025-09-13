@@ -20,7 +20,9 @@
     "postinstall": "node scripts/postinstall.cjs || echo 'Postinstall completed'",
     "test": "ng test threejs-ui-lib",
     "lint": "ng lint threejs-ui-lib",
-    "devapp": "ng serve dev-app"
+    "devapp": "ng serve dev-app",
+    "verify-migration": "bash scripts/verify-migration.sh",
+    "update-alephscript": "bash scripts/update-alephscript-deps.sh"
   },
   "dependencies": {
     "@alephscript/angular": "file:../socket-gym/ws-server/packages/aleph-script-angular/alephscript-angular-1.0.0.tgz",

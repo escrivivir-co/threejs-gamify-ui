@@ -1,49 +1,39 @@
-import { Injectable, Inject, PLATFORM_ID } from '@angular/core';
-import { isPlatformBrowser } from '@angular/common';
-import { BehaviorSubject, Observable, Subject, map } from 'rxjs';
-import { AlephScriptService as CoreAlephScriptService, AlephMessage } from '@alephscript/angular';
-
-export interface AlephScriptConfig {
-  serverUrl: string;
-  timeout?: number;
-  debug?: boolean;
-  fallbackMode?: boolean;
-  uiType?: string;
-  uiId?: string;
-}
-
-export interface AlephScriptMessage {
-  id: string;
-  type: string;
-  data: any;
-  timestamp: number;
-  source?: string;
-  target?: string;
-}
+import { Injectable, Inject, PLATFORM_ID } from "@angular/core";
+import { isPlatformBrowser } from "@angular/common";
+import { BehaviorSubject, Observable, Subject, map } from "rxjs";
+import {
+  AlephScriptService as CoreAlephScriptService,
+  AlephMessage,
+  AlephClientConfig,
+} from "@alephscript/angular";
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: "root",
 })
 export class AlephScriptService {
   private fallbackModeEnabled = false;
-  private fallbackConnectionStatus$ = new BehaviorSubject<string>('disconnected');
-  private fallbackMessages$ = new Subject<AlephScriptMessage>();
+  private fallbackConnectionStatus$ = new BehaviorSubject<string>(
+    "disconnected"
+  );
+  private fallbackMessages$ = new Subject<AlephMessage>();
   private fallbackEvents$ = new Subject<any>();
 
   // Default configuration
-  private config: AlephScriptConfig = {
-    serverUrl: 'ws://localhost:3000',
+  private config: AlephClientConfig = {
+    url: "ws://localhost:3000",
     timeout: 10000,
     debug: true,
-    fallbackMode: true
+    name: "BASTION_BOT_THREEJS_SRV",
   };
 
   constructor(
     @Inject(PLATFORM_ID) private platformId: Object,
     private coreAlephScript: CoreAlephScriptService
   ) {
-    console.log('🔗 AlephScriptService initialized - Using new @alephscript/angular implementation');
-    console.log('🔌 Status inicial - isConnected:', this.connected());
+    console.log(
+      "🔗 AlephScriptService initialized - Using new @alephscript/angular implementation"
+    );
+    console.log("🔌 Status inicial - isConnected:", this.connected());
   }
 
   /**
@@ -59,11 +49,11 @@ export class AlephScriptService {
   /**
    * Get messages as observable
    */
-  getMessages(): Observable<AlephScriptMessage> {
+  getMessages(): Observable<AlephMessage> {
     if (this.fallbackModeEnabled) {
       return this.fallbackMessages$.asObservable();
     }
-    
+
     // Transform AlephMessage to AlephScriptMessage for backward compatibility
     return this.coreAlephScript.messages.pipe(
       map((msg: AlephMessage) => ({
@@ -72,7 +62,7 @@ export class AlephScriptService {
         data: msg.data,
         timestamp: msg.timestamp || Date.now(),
         source: msg.source,
-        target: msg.target
+        target: msg.target,
       }))
     );
   }
@@ -90,10 +80,10 @@ export class AlephScriptService {
   /**
    * Configure the service
    */
-  configure(config: Partial<AlephScriptConfig>): void {
+  configure(config: Partial<AlephClientConfig>): void {
     this.config = { ...this.config, ...config };
-    console.log('⚙️ AlephScript configurado:', this.config);
-    
+    console.log("⚙️ AlephScript configurado:", this.config);
+
     if (!this.fallbackModeEnabled) {
       // No need for separate configure call - the core service handles configuration internally
     }
@@ -104,7 +94,7 @@ export class AlephScriptService {
    */
   connected(): boolean {
     if (this.fallbackModeEnabled) {
-      return this.fallbackConnectionStatus$.value === 'connected';
+      return this.fallbackConnectionStatus$.value === "connected";
     }
     return this.coreAlephScript.isConnected();
   }
@@ -127,14 +117,20 @@ export class AlephScriptService {
    * Connect to server
    */
   connect(): void {
+    // Check if already connected
+    if (this.connected() && !this.fallbackModeEnabled) {
+      console.log("⚠️ Already connected to AlephScript server");
+      return;
+    }
+
     if (this.fallbackModeEnabled) {
-      console.log('🔄 Attempting reconnection from fallback mode...');
+      console.log("🔄 Attempting reconnection from fallback mode...");
       this.fallbackModeEnabled = false;
-      this.fallbackConnectionStatus$.next('connecting');
+      this.fallbackConnectionStatus$.next("connecting");
     }
 
     if (!isPlatformBrowser(this.platformId)) {
-      console.log('🚫 Not in browser environment, enabling fallback mode');
+      console.log("🚫 Not in browser environment, enabling fallback mode");
       this.enableOfflineMode();
       return;
     }
@@ -142,9 +138,8 @@ export class AlephScriptService {
     try {
       // Simply call connect on the core service
       this.coreAlephScript.connect();
-      
     } catch (error) {
-      console.error('❌ Connection failed:', error);
+      console.error("❌ Connection failed:", error);
       this.handleConnectionError();
     }
   }
@@ -153,14 +148,14 @@ export class AlephScriptService {
    * Disconnect from server
    */
   disconnect(): void {
-    console.log('🔌 Disconnecting from AlephScript server...');
-    
+    console.log("🔌 Disconnecting from AlephScript server...");
+
     if (!this.fallbackModeEnabled) {
       this.coreAlephScript.disconnect();
     }
-    
+
     if (this.fallbackModeEnabled) {
-      this.fallbackConnectionStatus$.next('disconnected');
+      this.fallbackConnectionStatus$.next("disconnected");
     }
   }
 
@@ -168,9 +163,9 @@ export class AlephScriptService {
    * Enable offline mode
    */
   enableOfflineMode(): void {
-    console.log('📴 Enabling offline mode...');
+    console.log("📴 Enabling offline mode...");
     this.fallbackModeEnabled = true;
-    this.fallbackConnectionStatus$.next('offline');
+    this.fallbackConnectionStatus$.next("offline");
   }
 
   /**
@@ -178,17 +173,16 @@ export class AlephScriptService {
    */
   sendMessage(type: string, data: any): void {
     if (this.fallbackModeEnabled) {
-      console.log('📴 Offline mode - message not sent:', { type, data });
+      console.log("📴 Offline mode - message not sent:", { type, data });
       return;
     }
 
     try {
       // Use the core service's sendMessage directly
       this.coreAlephScript.sendMessage(type, data);
-      console.log('📤 Message sent:', { type, data });
-      
+      console.log("📤 Message sent:", { type, data });
     } catch (error) {
-      console.error('❌ Failed to send message:', error);
+      console.error("❌ Failed to send message:", error);
       this.handleConnectionError();
     }
   }
@@ -197,12 +191,10 @@ export class AlephScriptService {
    * Handle connection errors
    */
   private handleConnectionError(): void {
-    console.log('⚠️ Connection error detected');
-    
-    if (this.config.fallbackMode) {
-      console.log('🔄 Enabling fallback mode due to connection error');
-      this.enableOfflineMode();
-    }
+    console.log("⚠️ Connection error detected");
+
+    console.log("🔄 Enabling fallback mode due to connection error");
+    this.enableOfflineMode();
   }
 
   /**

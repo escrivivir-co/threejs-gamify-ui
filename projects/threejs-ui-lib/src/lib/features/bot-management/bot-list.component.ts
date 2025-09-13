@@ -22,8 +22,6 @@ export class BotListComponent implements OnInit, OnDestroy {
   constructor(private alephScriptService: AlephScriptService) {}
 
   ngOnInit() {
-    console.log('BotListComponent initializing...');
-    
     // Initialize default bots (8 positions on cardinal spirals)
     this.initializeBots();
     
