@@ -15,8 +15,11 @@
   },
   "scripts": {
     "build": "ng build threejs-ui-lib",
-    "build:package": "npm run build && npm pack",
+    "build:dev-app": "ng build dev-app",
+    "build:all": "npm run build && npm run build:dev-app",
+    "build:package": "npm run build:all && npm pack",
     "pack": "npm pack",
+    "prepack": "npm run build:all",
     "postinstall": "node scripts/postinstall.cjs || echo 'Postinstall completed'",
     "test": "ng test threejs-ui-lib",
     "lint": "ng lint threejs-ui-lib",
