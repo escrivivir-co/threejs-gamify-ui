@@ -28,7 +28,7 @@ export class AlephScriptService {
 
   constructor(
     @Inject(PLATFORM_ID) private platformId: Object,
-    private coreAlephScript: CoreAlephScriptService
+    public coreAlephScript: CoreAlephScriptService
   ) {
     console.log(
       "🔗 AlephScriptService initialized - Using new @alephscript/angular implementation"

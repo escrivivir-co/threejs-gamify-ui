@@ -321,6 +321,9 @@ export class ThreeSceneService {
     const deltaTime = this.clock.getDelta();
     this.frameCount++;
     
+    // Emit before render event for animations
+    this.onBeforeRender.next(deltaTime);
+    
     // Update controls
     if (this.controls) {
       this.controls.update();
@@ -408,6 +411,18 @@ export class ThreeSceneService {
     // Reset clock
     this.clock.start();
   }
+
+  /**
+   * Get the Three.js scene reference
+   */
+  getScene(): THREE.Scene | null {
+    return this.scene;
+  }
+
+  /**
+   * Observable for before render events (for animations)
+   */
+  onBeforeRender = new Subject<number>();
 
   /**
    * Clean up resources

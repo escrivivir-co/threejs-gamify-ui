@@ -1,0 +1,127 @@
+<div class="threejs-ui-container">
+  <!-- Loading overlay -->
+  <div class="loading-overlay" *ngIf="isLoading">
+    <div class="spinner"></div>
+    <p>Initializing 3D Scene & AlephScript Connection...</p>
+  </div>
+
+  <!-- Three.js Canvas Container -->
+  <div class="canvas-container" #canvasContainer></div>
+
+  <!-- UI Overlay -->
+  <div class="ui-overlay">
+    <!-- Top Header -->
+    <div class="header-panel ui-panel">
+      <h1>{{ config.gameTitle }}</h1>
+      <div class="connection-status">
+        <span class="status-indicator" [class]="connectionStatus"></span>
+        AlephScript: {{ connectionStatus.toUpperCase() }}
+      </div>
+    </div>
+
+    <!-- Left Panel - Bot Management -->
+    <div class="left-panel">
+      <button class="btn panel-toggle-btn" (click)="toggleBotManagement()">
+        🤖 Bot Management
+      </button>
+    </div>
+
+    <!-- Right Panel - Message Stream -->
+    <div class="right-panel">
+      <button class="btn panel-toggle-btn" (click)="toggleMessagePanel()">
+        💬 Messages
+      </button>
+    </div>
+
+    <!-- Enhanced Bottom Control Panel -->
+    <div class="bottom-control-panel ui-panel">
+      <!-- Demo Controls Section -->
+      <div class="control-section">
+        <demo-controls 
+          [state]="{
+            isRunning: isDemoRunning,
+            phase: demoPhase,
+            speed: demoSpeed,
+            channel: demoChannel,
+            messagesCount: demoMessagesCount
+          }"
+          (toggle)="toggleDemo()"
+          (phaseChange)="setDemoPhase($event)"
+          (speedChange)="setDemoSpeed($event)"
+          (channelChange)="setDemoChannel($event)"
+          (singleMessage)="sendSingleDemoMessage()"
+          (burst)="sendDemoBurst()"
+          (reset)="resetDemoSimulator()">
+        </demo-controls>
+      </div>
+
+      <!-- Visual Controls Section -->
+      <div class="control-section">
+        <visual-controls 
+          [state]="{
+            isWireframeMode: isWireframeMode,
+            currentFPS: currentFPS,
+            particleCount: getActiveParticleCount(),
+            animationCount: getActiveAnimationCount()
+          }"
+          (toggleWireframe)="toggleWireframe()"
+          (resetCamera)="resetCamera()"
+          (takeScreenshot)="takeScreenshot()"
+          (resetScene)="resetScene()">
+        </visual-controls>
+      </div>
+
+      <!-- Modal Controls Section -->
+      <div class="control-section">
+        <div class="modal-controls">
+          <h4>🪟 Windows</h4>
+          <div class="modal-button-grid">
+            <button class="btn btn-secondary modal-btn" (click)="toggleAlephScriptTest()">
+              ⚡ AlephScript
+            </button>
+            <button class="btn btn-secondary modal-btn" (click)="openSettings()">
+              ⚙️ Settings
+            </button>
+            <button class="btn btn-secondary modal-btn" (click)="openHelp()">
+              📖 Help
+            </button>
+            <button class="btn btn-secondary modal-btn" (click)="openDemoControls()">
+              🎛️ Advanced
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connection Controls Section -->
+      <div class="control-section">
+        <div class="connection-controls">
+          <h4>🔗 Connection</h4>
+          <div class="connection-button-grid">
+            <button class="btn btn-primary" 
+                    *ngIf="connectionStatus === 'disconnected' || connectionStatus === 'error'"
+                    (click)="connectToAlephScript()">
+              {{ isLoading ? 'Connecting...' : '🔌 Connect' }}
+            </button>
+            
+            <button class="btn btn-danger" 
+                    *ngIf="connectionStatus === 'connected'"
+                    (click)="disconnectFromAlephScript()">
+              🔌 Disconnect
+            </button>
+            
+            <button class="btn btn-warning" 
+                    (click)="toggleOfflineMode()">
+              {{ alephScriptService.isFallbackMode() ? '🔄 Try Reconnect' : '📴 Offline Mode' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Manager -->
+  <app-modal-manager></app-modal-manager>
+
+  <!-- AlephScript Test Component (deprecated - now in modal) -->
+  <!-- <app-alephscript-test></app-alephscript-test> -->
+</div>

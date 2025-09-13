@@ -33,11 +33,13 @@ export class TrajectoryManager {
   private channelColors = {
     sys: new THREE.Color(0xff4444), // Red
     app: new THREE.Color(0x4444ff), // Blue
-    ui: new THREE.Color(0x44ff44)   // Green
+    ui: new THREE.Color(0x44ff44),  // Green
+    agent: new THREE.Color(0xffaa44), // Orange
+    game: new THREE.Color(0xaa44ff)  // Purple
   };
 
   constructor() {
-    console.log('TrajectoryManager initialized');
+    console.log('🛤️ TrajectoryManager initialized');
     this.initializeGeometry();
     this.initializeMaterials();
   }
@@ -68,6 +70,7 @@ export class TrajectoryManager {
    */
   setScene(scene: THREE.Scene): void {
     this.scene = scene;
+    console.log('🛤️ Scene reference set');
   }
 
   /**
@@ -122,7 +125,7 @@ export class TrajectoryManager {
   ): MessageParticle | null {
     
     if (!this.scene || !this.particleGeometry) {
-      console.warn('Scene or geometry not initialized');
+      console.warn('🛤️ Scene or geometry not initialized');
       return null;
     }
 
@@ -162,7 +165,7 @@ export class TrajectoryManager {
     // Store active particle
     this.activeParticles.set(id, particle);
 
-    console.log(`Created message particle: ${id} (${channel})`);
+    console.log(`🛤️ Created message particle: ${id} (${channel})`);
     return particle;
   }
 
@@ -235,7 +238,7 @@ export class TrajectoryManager {
       // Remove from active particles
       this.activeParticles.delete(id);
       
-      console.log(`Removed message particle: ${id}`);
+      console.log(`🛤️ Removed message particle: ${id}`);
     }
   }
 
@@ -247,7 +250,7 @@ export class TrajectoryManager {
     messageId: string,
     channel: string = 'app'
   ): MessageParticle | null {
-    const centerPosition = new THREE.Vector3(0, 0, 0);
+    const centerPosition = new THREE.Vector3(0, 1, 0); // Slightly elevated center
     return this.createMessageParticle(
       messageId,
       botPosition,
@@ -265,7 +268,7 @@ export class TrajectoryManager {
     messageId: string,
     channel: string = 'app'
   ): MessageParticle | null {
-    const centerPosition = new THREE.Vector3(0, 0, 0);
+    const centerPosition = new THREE.Vector3(0, 1, 0); // Slightly elevated center
     return this.createMessageParticle(
       messageId,
       centerPosition,
@@ -286,7 +289,7 @@ export class TrajectoryManager {
    * Clear all particles
    */
   clearAllParticles(): void {
-    console.log(`Clearing ${this.activeParticles.size} active particles`);
+    console.log(`🛤️ Clearing ${this.activeParticles.size} active particles`);
     
     const particleIds = Array.from(this.activeParticles.keys());
     particleIds.forEach(id => {
@@ -326,7 +329,7 @@ export class TrajectoryManager {
    * Dispose of resources
    */
   dispose(): void {
-    console.log('Disposing TrajectoryManager');
+    console.log('🛤️ Disposing TrajectoryManager');
     
     // Clear all particles
     this.clearAllParticles();

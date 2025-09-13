@@ -1,0 +1,249 @@
+.threejs-ui-container {
+  display: block;
+  width: 100%;
+  height: 600px;
+  position: relative;
+  overflow: hidden;
+  background: #000;
+  border-radius: 8px;
+}
+
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  color: white;
+  border-radius: inherit;
+}
+
+.loading-overlay .spinner {
+  border: 4px solid #333;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.canvas-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  background: #111;
+  border-radius: inherit;
+}
+
+.ui-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.ui-panel {
+  pointer-events: auto;
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid #444;
+  border-radius: 8px;
+  color: white;
+  padding: 15px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.header-panel {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  right: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-panel h1 {
+  margin: 0;
+  font-size: 1.5em;
+  color: #3498db;
+}
+
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #e74c3c;
+}
+
+.status-indicator.connected {
+  background: #27ae60;
+}
+
+.status-indicator.connecting {
+  background: #f39c12;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.left-panel, .right-panel {
+  position: absolute;
+  top: 100px;
+  width: 300px;
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+}
+
+.left-panel {
+  left: 20px;
+}
+
+.right-panel {
+  right: 20px;
+}
+
+.panel-toggle-btn {
+  background: rgba(52, 152, 219, 0.8);
+  border: none;
+  color: white;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-bottom: 10px;
+  transition: background-color 0.3s;
+}
+
+.panel-toggle-btn:hover {
+  background: rgba(52, 152, 219, 1);
+}
+
+.bottom-control-panel {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  right: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: center;
+}
+
+.control-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.btn {
+  background: rgba(52, 152, 219, 0.8);
+  border: none;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.3s;
+}
+
+.btn:hover {
+  background: rgba(52, 152, 219, 1);
+}
+
+.btn:disabled {
+  background: rgba(128, 128, 128, 0.5);
+  cursor: not-allowed;
+}
+
+.btn.danger {
+  background: rgba(231, 76, 60, 0.8);
+}
+
+.btn.danger:hover {
+  background: rgba(231, 76, 60, 1);
+}
+
+.btn.success {
+  background: rgba(39, 174, 96, 0.8);
+}
+
+.btn.success:hover {
+  background: rgba(39, 174, 96, 1);
+}
+
+.status-display {
+  display: flex;
+  gap: 15px;
+  font-size: 12px;
+}
+
+.status-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.status-item label {
+  color: #bbb;
+  margin-bottom: 2px;
+}
+
+.status-item span {
+  color: #3498db;
+  font-weight: bold;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .header-panel {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+  
+  .left-panel, .right-panel {
+    position: relative;
+    width: 100%;
+    max-height: none;
+    top: auto;
+    left: auto;
+    right: auto;
+    margin: 10px 0;
+  }
+  
+  .bottom-control-panel {
+    position: relative;
+    bottom: auto;
+    left: auto;
+    right: auto;
+    margin-top: 20px;
+  }
+}

@@ -32,6 +32,7 @@ export interface Animation {
   providedIn: 'root'
 })
 export class AnimationController {
+  private scene: THREE.Scene | null = null;
   private animations = new Map<string, Animation>();
   private clock = new THREE.Clock();
   private isRunning = false;
@@ -54,7 +55,15 @@ export class AnimationController {
   private lastFrameTime = 0;
 
   constructor() {
-    console.log('AnimationController initialized');
+    console.log('🎬 AnimationController initialized');
+  }
+
+  /**
+   * Set the Three.js scene reference
+   */
+  setScene(scene: THREE.Scene): void {
+    this.scene = scene;
+    console.log('🎬 Scene reference set');
   }
 
   /**
@@ -79,11 +88,11 @@ export class AnimationController {
   /**
    * Update all active animations
    */
-  update(): void {
+  update(externalDeltaTime?: number): void {
     if (!this.isRunning) return;
 
     const startTime = performance.now();
-    const deltaTime = this.clock.getDelta();
+    const deltaTime = externalDeltaTime !== undefined ? externalDeltaTime : this.clock.getDelta();
     const currentTime = this.clock.elapsedTime;
 
     const animationsToRemove: string[] = [];
@@ -360,6 +369,15 @@ export class AnimationController {
   }
 
   /**
+   * Stop and remove all animations
+   */
+  stopAll(): void {
+    console.log(`🎬 Stopping all ${this.animations.size} animations`);
+    this.animations.clear();
+    this.animationCount$.next(0);
+  }
+
+  /**
    * Get animation by ID
    */
   getAnimation(id: string): Animation | undefined {
@@ -400,11 +418,28 @@ export class AnimationController {
       // Numeric interpolation
       target.currentValue = startValue + (endValue - startValue) * progress;
     } else if (startValue instanceof THREE.Vector3 && endValue instanceof THREE.Vector3) {
-      // Vector3 interpolation
-      target.currentValue = startValue.clone().lerp(endValue, progress);
+      // Vector3 interpolation - create new Vector3 to avoid modifying original
+      if (!target.currentValue || !(target.currentValue instanceof THREE.Vector3)) {
+        target.currentValue = new THREE.Vector3();
+      }
+      target.currentValue.copy(startValue).lerp(endValue, progress);
+    } else if (startValue instanceof THREE.Euler && endValue instanceof THREE.Euler) {
+      // Euler interpolation - create new Euler to avoid modifying original
+      if (!target.currentValue || !(target.currentValue instanceof THREE.Euler)) {
+        target.currentValue = new THREE.Euler();
+      }
+      target.currentValue.set(
+        THREE.MathUtils.lerp(startValue.x, endValue.x, progress),
+        THREE.MathUtils.lerp(startValue.y, endValue.y, progress),
+        THREE.MathUtils.lerp(startValue.z, endValue.z, progress),
+        startValue.order
+      );
     } else if (startValue instanceof THREE.Color && endValue instanceof THREE.Color) {
       // Color interpolation
-      target.currentValue = startValue.clone().lerp(endValue, progress);
+      if (!target.currentValue || !(target.currentValue instanceof THREE.Color)) {
+        target.currentValue = new THREE.Color();
+      }
+      target.currentValue.copy(startValue).lerp(endValue, progress);
     } else {
       // Fallback - direct assignment at 50% progress
       target.currentValue = progress < 0.5 ? startValue : endValue;
@@ -449,7 +484,32 @@ export class AnimationController {
       }
     }
     
+    // Clone Three.js objects to avoid reference issues
+    if (this.isThreeJSVector3Like(current)) {
+      return new THREE.Vector3(current.x, current.y, current.z);
+    } else if (this.isThreeJSEulerLike(current)) {
+      return new THREE.Euler(current.x, current.y, current.z, current.order);
+    }
+    
     return current;
+  }
+
+  /**
+   * Check if value is Vector3-like
+   */
+  private isThreeJSVector3Like(value: any): boolean {
+    return value && typeof value === 'object' && 
+           'x' in value && 'y' in value && 'z' in value &&
+           typeof value.set === 'function';
+  }
+
+  /**
+   * Check if value is Euler-like
+   */
+  private isThreeJSEulerLike(value: any): boolean {
+    return value && typeof value === 'object' && 
+           'x' in value && 'y' in value && 'z' in value &&
+           'order' in value && typeof value.set === 'function';
   }
 
   /**
@@ -470,7 +530,55 @@ export class AnimationController {
     
     const lastPart = parts[parts.length - 1];
     if (current && typeof current === 'object' && lastPart in current) {
-      current[lastPart] = value;
+      // Handle Three.js specific properties
+      if (this.isThreeJSVector3Property(current, lastPart)) {
+        this.setVector3Property(current[lastPart], value);
+      } else if (this.isThreeJSEulerProperty(current, lastPart)) {
+        this.setEulerProperty(current[lastPart], value);
+      } else {
+        // Regular property assignment
+        current[lastPart] = value;
+      }
+    }
+  }
+
+  /**
+   * Check if property is a Three.js Vector3
+   */
+  private isThreeJSVector3Property(object: any, property: string): boolean {
+    const value = object[property];
+    return value && typeof value === 'object' && 
+           'x' in value && 'y' in value && 'z' in value &&
+           typeof value.set === 'function' &&
+           (property === 'position' || property === 'scale');
+  }
+
+  /**
+   * Check if property is a Three.js Euler
+   */
+  private isThreeJSEulerProperty(object: any, property: string): boolean {
+    const value = object[property];
+    return value && typeof value === 'object' && 
+           'x' in value && 'y' in value && 'z' in value &&
+           typeof value.set === 'function' &&
+           property === 'rotation';
+  }
+
+  /**
+   * Set Vector3 property values
+   */
+  private setVector3Property(vector3: any, value: any): void {
+    if (value && typeof value === 'object' && 'x' in value && 'y' in value && 'z' in value) {
+      vector3.set(value.x, value.y, value.z);
+    }
+  }
+
+  /**
+   * Set Euler property values
+   */
+  private setEulerProperty(euler: any, value: any): void {
+    if (value && typeof value === 'object' && 'x' in value && 'y' in value && 'z' in value) {
+      euler.set(value.x, value.y, value.z);
     }
   }
 
