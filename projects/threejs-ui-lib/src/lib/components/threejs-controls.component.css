@@ -1,0 +1,109 @@
+.threejs-controls-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid #444;
+  border-radius: 8px;
+  color: white;
+  padding: 15px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.control-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.modal-controls h4,
+.connection-controls h4 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  color: #3498db;
+}
+
+.modal-button-grid,
+.connection-button-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.btn {
+  background: rgba(52, 152, 219, 0.8);
+  border: none;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.3s;
+  white-space: nowrap;
+}
+
+.btn:hover {
+  background: rgba(52, 152, 219, 1);
+}
+
+.btn:disabled {
+  background: rgba(128, 128, 128, 0.5);
+  cursor: not-allowed;
+}
+
+.btn.btn-primary {
+  background: rgba(52, 152, 219, 0.8);
+}
+
+.btn.btn-primary:hover {
+  background: rgba(52, 152, 219, 1);
+}
+
+.btn.btn-secondary {
+  background: rgba(149, 165, 166, 0.8);
+}
+
+.btn.btn-secondary:hover {
+  background: rgba(149, 165, 166, 1);
+}
+
+.btn.btn-danger {
+  background: rgba(231, 76, 60, 0.8);
+}
+
+.btn.btn-danger:hover {
+  background: rgba(231, 76, 60, 1);
+}
+
+.btn.btn-warning {
+  background: rgba(243, 156, 18, 0.8);
+}
+
+.btn.btn-warning:hover {
+  background: rgba(243, 156, 18, 1);
+}
+
+.modal-btn {
+  min-width: 100px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .threejs-controls-container {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .control-section {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .modal-button-grid,
+  .connection-button-grid {
+    justify-content: center;
+    width: 100%;
+  }
+}
